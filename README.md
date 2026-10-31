@@ -9,7 +9,7 @@ Real LLMs have billions of weights. This one has about 100, so you can watch it 
 3. **Freeze and predict**: load the file, turn scores into chances (softmax), pick a token, repeat
 
 Everything runs in the browser. No server, no install, no AI library: the training math is about ten lines of plain code.
-
+# Experience: https://kagitha-dev.github.io/tiny-llm-lab/index.html
 ## Pages
 
 | Page | What it shows |
