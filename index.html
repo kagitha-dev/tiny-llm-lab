@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tiny LLM Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one lab bench, three stations in the model's life order (train → save → freeze and predict), with an explanation rail on the right */
+:root{
+  --bg:#f2f4f7; --panel:#ffffff; --ink:#152033; --muted:#5a6578; --line:#d9dfe8; --cell:#edf0f5;
+  --pos:#1d63c9; --neg:#d0532a; --good:#18805a; --warn:#a86a00; --on-strong:#ffffff;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d131e; --panel:#151d2b; --ink:#e5ebf4; --muted:#95a1b5; --line:#283346; --cell:#1b2434;
+  --pos:#5b9dff; --neg:#ff8656; --good:#45cf95; --warn:#f0b13c; --on-strong:#0d131e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d131e; --panel:#151d2b; --ink:#e5ebf4; --muted:#95a1b5; --line:#283346; --cell:#1b2434;
+  --pos:#5b9dff; --neg:#ff8656; --good:#45cf95; --warn:#f0b13c; --on-strong:#0d131e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;margin:0;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.layout{max-width:1500px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.layout.open{grid-template-columns:minmax(0,1fr) 380px}
+.layout:not(.open) aside{display:none}
+.wrap{display:flex;flex-direction:column;gap:20px;min-width:0}
+nav.pages{display:flex;gap:6px;flex-wrap:wrap;font:600 14px var(--body)}
+nav.pages a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
+nav.pages a:hover{color:var(--ink);border-color:var(--muted)}
+nav.pages a[aria-current="page"]{color:var(--on-strong);background:var(--ink);border-color:var(--ink)}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 24px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:6px 0 0;max-width:64ch}
+.badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;font-weight:600;
+  padding:8px 14px;border-radius:999px;border:1.5px solid currentColor;white-space:nowrap}
+.badge::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+.badge.raw{color:var(--muted)} .badge.train{color:var(--warn)} .badge.frozen{color:var(--pos)} .badge.stale{color:var(--neg)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.step{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pos);font-weight:600}
+h2{font-family:var(--display);font-weight:700;font-size:24px;margin:0;text-wrap:balance}
+h3{font:600 15px var(--body);margin:0 0 4px}
+.hint{color:var(--muted);font-size:14px;margin:0}
+textarea,input[type=text],input[type=number],select{width:100%;font:500 17px/1.5 var(--mono);color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+input[type=number]{width:96px;padding:9px 10px}
+select{width:auto;padding:8px 10px;font-size:15px}
+input[type=range]{accent-color:var(--pos);width:150px}
+textarea:focus,input:focus,select:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--pos);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row label,.ctl label{font-size:14px;color:var(--muted)}
+.ctl{display:flex;align-items:center;gap:8px}
+.ctl output{font:600 14px var(--mono);min-width:36px}
+button{font:600 15px var(--body);color:var(--ink);background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:10px 16px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--pos);border-color:var(--pos);color:var(--on-strong)}
+button.danger{color:var(--neg)}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.addrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:10px}
+.sub-h{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:112px;overflow:auto}
+.tok{display:inline-flex;align-items:stretch;font:13px var(--mono);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.tok b{padding:3px 8px;font-weight:600;background:var(--panel)}
+.tok i{font-style:normal;padding:3px 7px;background:var(--cell);color:var(--muted)}
+.pair{font:13px var(--mono);background:var(--cell);border-radius:6px;padding:3px 8px;color:var(--muted)}
+.pair b{color:var(--ink);font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:16px}
+.stat{background:var(--cell);border-radius:10px;padding:10px 12px}
+.stat span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.stat strong{font:600 22px var(--mono);font-variant-numeric:tabular-nums}
+.note{font-size:14px;color:var(--neg);margin:10px 0 0;min-height:1.2em}
+.split{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:20px;margin-top:18px}
+@media (max-width:860px){.split{grid-template-columns:minmax(0,1fr)}}
+.mat-wrap{overflow-x:auto;padding-bottom:4px}
+table.mat{border-collapse:separate;border-spacing:3px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.mat th{font-size:13px;font-weight:600;color:var(--muted);padding:2px 6px;white-space:nowrap}
+.mat thead th{height:64px;vertical-align:bottom}
+.mat thead th div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto}
+.mat tbody th{text-align:right}
+.mat td{width:46px;min-width:40px;height:38px;text-align:center;font-size:12.5px;border-radius:6px;transition:background .25s}
+.mat tr.active th{color:var(--pos)}
+.mat tr.active td{box-shadow:inset 0 0 0 2px var(--pos)}
+.mat td.changed{box-shadow:inset 0 0 0 2px var(--good)}
+.axis{font:12px var(--mono);color:var(--muted);margin:0 0 6px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px}
+.changes{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;font:14px var(--mono)}
+.changes li{display:flex;justify-content:space-between;gap:12px;background:var(--cell);border-radius:8px;padding:6px 10px}
+.changes .empty{background:none;color:var(--muted);font-family:var(--body);padding:0}
+.up{color:var(--good)} .down{color:var(--neg)}
+.file{background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-width:0;margin-top:14px}
+.file-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font:600 13px var(--mono);flex-wrap:wrap}
+.file-bar .row{gap:6px}
+.file-bar button{padding:5px 10px;font-size:13px}
+.file pre{margin:0;padding:12px;font:12px/1.6 var(--mono);overflow:auto;max-height:340px;white-space:pre;color:var(--ink)}
+.file pre.empty{color:var(--muted);font-family:var(--body);font-size:14px;white-space:normal}
+.savestate{font:600 13px var(--mono)}
+.lookup{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.lk{font:13px var(--mono);background:var(--cell);border-radius:6px;padding:4px 8px}
+.bars{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.bar-row{display:grid;grid-template-columns:72px minmax(0,1fr) 62px;align-items:center;gap:10px;font-family:var(--mono)}
+.bar-row .w{text-align:right;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.bar-track{height:24px;background:var(--cell);border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;background:var(--pos);opacity:.45;border-radius:6px;transition:width .3s}
+.bar-row.top .bar-fill{opacity:1}
+.bar-row.cut{opacity:.4}
+.bar-row .p{font-size:14px;text-align:right;font-variant-numeric:tabular-nums}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-top:14px}
+.samp{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin-top:16px;padding:12px 14px;background:var(--cell);border-radius:10px}
+.out{font:600 22px/1.4 var(--mono);background:var(--cell);border-radius:10px;padding:12px 14px;margin-top:16px;word-break:break-word;min-height:58px}
+.out .new{color:var(--pos)}
+.err{font-size:14px;color:var(--neg);min-height:1.3em;margin:6px 0 0}
+svg.spark{display:block;width:100%;height:36px}
+.foot{color:var(--muted);font-size:14px;max-width:80ch;margin:0}
+.foot a{color:var(--pos)}
+aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-width:0}
+.ex-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ex-head h2{font-size:20px}
+.ex-head button{padding:5px 10px;font-size:13px}
+#log{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
+#log li{padding:14px 16px;border-bottom:1px solid var(--line);font-size:14.5px;line-height:1.55;transition:background .6s}
+#log li.fresh{background:color-mix(in oklab,var(--pos) 9%,var(--panel))}
+#log li p{margin:6px 0 0}
+#log .t{display:flex;align-items:center;gap:8px;font-weight:600}
+.tag{font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:5px;border:1px solid currentColor}
+.tag.train{color:var(--warn)} .tag.save{color:var(--good)} .tag.predict{color:var(--pos)} .tag.info{color:var(--muted)}
+#log code{font:600 13px var(--mono);background:var(--cell);border-radius:4px;padding:1px 5px}
+.mini{width:100%;border-collapse:collapse;font:13px var(--mono);margin-top:8px;font-variant-numeric:tabular-nums}
+.mini th,.mini td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--line)}
+.mini th:first-child,.mini td:first-child{text-align:left;color:var(--muted);font-weight:400}
+.mini th{color:var(--ink)}
+#explainToggle[aria-expanded="true"]{border-color:var(--pos);color:var(--pos)}
+@media (max-width:1060px){.layout.open{grid-template-columns:minmax(0,1fr)} aside{position:static;max-height:340px;order:-1}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="layout" id="layout">
+<div class="wrap">
+  <nav class="pages" aria-label="Pages"><a href="index.html" aria-current="page">1 · Tiny LLM Lab</a><a href="tokens.html">2 · Tokens and embeddings</a></nav>
+  <header>
+    <div>
+      <h1>Tiny LLM Lab</h1>
+      <p class="sub">A real, very small language model that runs in your browser. It learns which word comes next from any text you give it, saves what it learned as numbers, and uses those frozen numbers to predict.</p>
+    </div>
+    <div class="row">
+      <span id="badge" class="badge raw">Untrained · random weights</span>
+      <button id="explainToggle" aria-expanded="false" aria-controls="explain">What's happening</button>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="step">Step 1 · Train</span><h2>Learn from text</h2></div>
+    <label class="hint" for="corpus">Training text</label>
+    <textarea id="corpus" rows="3" spellcheck="false" style="margin-top:6px">the cat sat on the mat . the dog sat on the rug . the cat ate fish .</textarea>
+    <div class="addrow">
+      <input type="text" id="more" placeholder="Add more training text, then train again" spellcheck="false" aria-label="Add more training text">
+      <button id="addBtn">Add</button>
+    </div>
+    <p class="sub-h">Tokens and their IDs</p>
+    <div class="chips" id="tokens" aria-label="Tokens"></div>
+    <p class="sub-h">Training examples (current token → next token)</p>
+    <div class="chips" id="pairs" aria-label="Training examples"></div>
+    <p class="note" id="stale"></p>
+    <div class="row" style="margin-top:4px">
+      <button class="primary" id="trainBtn">Train</button>
+      <span class="ctl"><label for="rounds">rounds</label><input type="number" id="rounds" value="50" min="1" max="1000" step="1"></span>
+      <span class="ctl"><label for="lr">learning rate</label><input type="number" id="lr" value="0.5" min="0.01" max="5" step="0.1"></span>
+      <button id="resetW">Reset weights to random</button>
+      <button class="danger" id="clearAll">Clear everything</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>Rounds trained</span><strong id="sEpoch">0</strong></div>
+      <div class="stat"><span>Error (loss)</span><strong id="sLoss">–</strong></div>
+      <div class="stat"><span>Weights</span><strong id="sParams">0</strong></div>
+      <div class="stat"><span>Error over time</span><svg class="spark" id="spark" viewBox="0 0 160 36" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    </div>
+    <div class="split">
+      <div style="min-width:0">
+        <h3>Weights in memory</h3>
+        <p class="axis">rows = current token · columns = possible next token</p>
+        <div class="mat-wrap"><table class="mat" id="mat"></table></div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--pos)"></i>positive: likely next</span>
+          <span><i class="sw" style="background:var(--neg)"></i>negative: unlikely next</span>
+          <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--good)"></i>changed most in last training</span>
+        </div>
+      </div>
+      <div style="min-width:0">
+        <h3>Biggest changes in the last training</h3>
+        <ul class="changes" id="changes"><li class="empty">Nothing trained yet.</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="step">Step 2 · Save</span><h2>Save the weights to a file</h2></div>
+    <p class="hint">Training happens in memory. Saving writes the learned numbers into a weights file. Prediction only ever uses the saved file.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="saveBtn">Save model</button>
+      <span class="filebtn"><button tabindex="-1">Load a model file</button><input type="file" id="loadFile" accept=".json,application/json" aria-label="Load a model file"></span>
+      <span class="savestate" id="saveState"></span>
+    </div>
+    <div class="file">
+      <div class="file-bar"><span>tiny_model.json</span><span class="row"><button id="download">Download</button><button id="copy">Copy</button></span></div>
+      <pre id="file" class="empty">No saved model yet. Train, then save.</pre>
+    </div>
+    <p class="hint" style="margin-top:8px">Same format as <code>tiny_llm.py</code>, so a model trained in Python can be loaded here.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="step">Step 3 · Freeze and predict</span><h2>Predict the next token</h2></div>
+    <p class="hint">The saved weights are loaded and frozen. Nothing you do here changes them.</p>
+    <label class="hint" for="prompt" style="display:block;margin-top:12px">Input text (context window: 1 token, so the model only uses the last one)</label>
+    <input type="text" id="prompt" value="the dog" spellcheck="false" style="margin-top:6px">
+    <p class="err" id="perr"></p>
+    <div class="flow">
+      <div>
+        <h3>1. Look up the saved weights for "<span id="lastw"></span>"</h3>
+        <p class="hint">Raw scores for every token in the vocabulary.</p>
+        <div class="lookup" id="lookup"></div>
+      </div>
+      <div>
+        <h3>2. Softmax turns scores into chances</h3>
+        <p class="hint" id="probHint">Higher score, higher chance. All chances add up to 100%.</p>
+        <div class="bars" id="bars"></div>
+      </div>
+    </div>
+    <div class="samp">
+      <span class="ctl"><label for="temp">temperature</label><input type="range" id="temp" min="0.1" max="2" step="0.1" value="1"><output id="tempOut">1.0</output></span>
+      <span class="ctl"><label for="topk">top-k</label><select id="topk"><option value="1">1 (always the top)</option><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option><option value="0">all</option></select></span>
+      <span class="hint">Low temperature sharpens the chances, high flattens them. Top-k keeps only the k most likely tokens.</span>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="primary" id="next">Add next token</button>
+      <button id="gen">Generate 6 tokens</button>
+      <button id="clearP">Clear input</button>
+    </div>
+    <div class="out" id="out"></div>
+  </section>
+
+  <p class="foot">A simplified model for understanding. Its tokens are whole words, it looks only at the last token, and it uses one grid of weights. Large language models use subword tokens, billions of weights and the whole input to compute their scores, but follow the same cycle: random weights, training that adjusts them, a saved weights file, and frozen weights that score every possible next token. Next: <a href="tokens.html">how text becomes tokens and embeddings</a>.</p>
+</div>
+<aside id="explain" aria-label="What's happening">
+  <div class="ex-head"><h2>What's happening</h2><button id="explainClose">Hide</button></div>
+  <ul id="log" aria-live="polite"></ul>
+</aside>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const SEED=7;
+let LR=0.5,seedState=SEED;
+function rnd(){seedState|=0;seedState=seedState+0x6D2B79F5|0;let t=Math.imul(seedState^seedState>>>15,1|seedState);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}
+let vocab=[],W=[],epoch=0,lossHist=[],changed=new Set(),running=false,trainedText="",saved=null,dirtySinceSave=false,lastEx=null;
+const tokenize=t=>t.toLowerCase().replace(/([.,!?;:])/g," $1 ").split(/\s+/).filter(Boolean);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function fmt(v,d=1){const s=v.toFixed(d);return /^-0\.0+$/.test(s)?s.slice(1):s}
+const pct=v=>(v*100).toFixed(1)+"%";
+const signed=v=>{const s=fmt(v,2);return(s.startsWith("-")?"":"+")+s};
+function corpusVocab(){const nv=[];tokenize($("corpus").value).forEach(w=>{if(!nv.includes(w))nv.push(w)});return nv}
+function getPairs(){const t=tokenize($("corpus").value);const p=[];for(let i=0;i<t.length-1;i++)p.push([t[i],t[i+1]]);return p}
+function softmax(r,T=1){const s=r.map(v=>v/T);const m=Math.max(...s);const e=s.map(v=>Math.exp(v-m));const z=e.reduce((a,b)=>a+b,0);return e.map(v=>v/z)}
+
+function syncVocab(){
+  const nv=corpusVocab();vocab.forEach(w=>{if(!nv.includes(w))nv.push(w)});
+  const old={};vocab.forEach((a,i)=>vocab.forEach((b,j)=>old[a+"\u0000"+b]=W[i][j]));
+  W=nv.map(a=>nv.map(b=>{const k=a+"\u0000"+b;return k in old?old[k]:(rnd()-0.5)}));
+  const added=nv.filter(w=>!vocab.includes(w));
+  const shape=nv.join("\u0001")!==vocab.join("\u0001");vocab=nv;if(shape)buildMatrix();
+  return added;
+}
+function trainEpoch(cap=-1){
+  const ps=getPairs().map(([a,b])=>[vocab.indexOf(a),vocab.indexOf(b)]);let loss=0;
+  ps.forEach(([x,y],n)=>{const p=softmax(W[x]);if(n===cap)lastEx={x,y,p:p.slice(),w:W[x].slice(),lr:LR};
+    loss-=Math.log(p[y]);for(let k=0;k<vocab.length;k++)W[x][k]-=LR*(p[k]-(k===y?1:0))});
+  epoch++;const l=loss/Math.max(ps.length,1);lossHist.push(l);return l;
+}
+function currentLoss(){const ps=getPairs().map(([a,b])=>[vocab.indexOf(a),vocab.indexOf(b)]);
+  let l=0;ps.forEach(([x,y])=>{l-=Math.log(softmax(W[x])[y])});return l/Math.max(ps.length,1)}
+
+function log(kind,title,html){
+  const ul=$("log");const li=document.createElement("li");li.className="fresh";
+  li.innerHTML=`<div class="t"><span class="tag ${kind}">${{train:"Train",save:"Save",predict:"Predict",info:"Model"}[kind]}</span>${esc(title)}</div>${html}`;
+  ul.prepend(li);while(ul.children.length>40)ul.lastChild.remove();ul.scrollTop=0;
+  setTimeout(()=>li.classList.remove("fresh"),1600);
+}
+function miniTable(label,cols,rows){
+  return `<table class="mini"><thead><tr><th>${esc(label)}</th>${cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`+
+    rows.map(([name,vals])=>`<tr><td>${name}</td>${vals.map(v=>`<td>${v}</td>`).join("")}</tr>`).join("")+"</tbody></table>";
+}
+function exampleHtml(){
+  if(!lastEx)return"";const{x,y,p,w,lr}=lastEx;const a=vocab[x],b=vocab[y];
+  const order=[...p.keys()].sort((i,j)=>p[j]-p[i]);const top=order[0];
+  const cols=[y,...order.filter(i=>i!==y)].slice(0,3);
+  const nudge=k=>-lr*(p[k]-(k===y?1:0));
+  const guess=top===y?`It already gave <code>${esc(b)}</code> the highest chance (${pct(p[y])}), but not 100%, so it still got a small push.`
+    :`Its top guess was <code>${esc(vocab[top])}</code> (${pct(p[top])}), while the right token <code>${esc(b)}</code> got only ${pct(p[y])}.`;
+  return `<p><b>One real example from this training:</b> the pair "${esc(a)} → ${esc(b)}". ${guess}</p>`+
+    miniTable(`after "${a}"`,cols.map(k=>vocab[k]),[
+      ["weight",cols.map(k=>fmt(w[k],2))],["chance",cols.map(k=>pct(p[k]))],
+      ["should be",cols.map(k=>k===y?"100%":"0%")],["nudge",cols.map(k=>signed(nudge(k)))],
+      ["new weight",cols.map(k=>fmt(w[k]+nudge(k),2))]])+
+    `<p>Each nudge is ${lr} (the learning rate) × (should be − got). The right token moves up, the others move down. Repeating this for every pair, round after round, is the whole training.</p>`;
+}
+
+function buildMatrix(){
+  let h="<thead><tr><th></th>"+vocab.map(w=>`<th><div>${esc(w)}</div></th>`).join("")+"</tr></thead><tbody>";
+  vocab.forEach((w,i)=>{h+=`<tr data-w="${esc(w)}"><th>${esc(w)}</th>`+vocab.map((_,j)=>`<td id="c${i}_${j}"></td>`).join("")+"</tr>"});
+  $("mat").innerHTML=vocab.length?h+"</tbody>":"";
+}
+function cellStyle(v){const p=Math.min(Math.abs(v)/4,1)*100;const col=v>=0?"var(--pos)":"var(--neg)";
+  return{bg:`color-mix(in oklab, ${col} ${Math.round(p)}%, var(--cell))`,fg:p>55?"var(--on-strong)":"var(--ink)"}}
+function renderMatrix(){
+  vocab.forEach((_,i)=>vocab.forEach((_,j)=>{const td=$(`c${i}_${j}`);if(!td)return;const v=W[i][j];const s=cellStyle(v);
+    td.textContent=fmt(v);td.style.background=s.bg;td.style.color=s.fg;td.classList.toggle("changed",changed.has(i+"_"+j))}));
+}
+function renderStats(){
+  $("sEpoch").textContent=epoch;$("sLoss").textContent=lossHist.length?fmt(lossHist[lossHist.length-1],3):"–";
+  $("sParams").textContent=vocab.length*vocab.length;
+  const h=lossHist.slice(-300);if(h.length<2){$("spark").innerHTML="";return}
+  const mx=Math.max(...h),mn=Math.min(...h,0);
+  const pts=h.map((v,i)=>`${(i/(h.length-1)*160).toFixed(1)},${(34-(v-mn)/(mx-mn||1)*32).toFixed(1)}`).join(" ");
+  $("spark").innerHTML=`<polyline points="${pts}" fill="none" stroke="var(--pos)" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+}
+function renderTokens(){
+  const toks=tokenize($("corpus").value);const cv=corpusVocab();
+  const ids=w=>{const i=vocab.indexOf(w);return i>=0?i:vocab.length+cv.filter(x=>!vocab.includes(x)).indexOf(w)};
+  $("tokens").innerHTML=toks.length?toks.map(w=>`<span class="tok"><b>${esc(w)}</b><i>${ids(w)}</i></span>`).join(""):`<span class="pair">No tokens yet</span>`;
+  const p=getPairs();
+  $("pairs").innerHTML=p.length?p.map(([a,b])=>`<span class="pair"><b>${esc(a)}</b> → ${esc(b)}</span>`).join(""):`<span class="pair">No training examples yet</span>`;
+}
+function fileText(m){
+  const r=v=>{const s=(+v.toFixed(3)).toString();return s==="-0"?"0":s};
+  return `{\n  "vocab": ${JSON.stringify(m.vocab)},\n  "rounds": ${m.epoch},\n  "weights": [\n`+
+    m.W.map(row=>"    ["+row.map(r).join(", ")+"]").join(",\n")+"\n  ]\n}\n";
+}
+function renderFile(){
+  const f=$("file");
+  if(!saved){f.className="empty";f.textContent="No saved model yet. Train, then save.";return}
+  f.className="";f.textContent=fileText(saved);
+}
+function renderSaveState(){
+  const s=$("saveState");
+  if(!saved){s.style.color="var(--muted)";s.textContent=epoch?"Trained weights are not saved yet":"Nothing to save yet";return}
+  if(dirtySinceSave){s.style.color="var(--neg)";s.textContent=`Weights changed since last save (saved at round ${saved.epoch})`}
+  else{s.style.color="var(--good)";s.textContent=`Saved at round ${saved.epoch}`}
+}
+function renderBadge(){
+  const b=$("badge");const stale=epoch>0&&$("corpus").value.trim()!==trainedText;
+  if(running){b.className="badge train";b.textContent="Training · weights changing"}
+  else if(epoch===0&&!saved){b.className="badge raw";b.textContent="Untrained · random weights"}
+  else if(stale){b.className="badge stale";b.textContent="New text not learned yet"}
+  else if(!saved||dirtySinceSave){b.className="badge stale";b.textContent="Trained · not saved"}
+  else{b.className="badge frozen";b.textContent="Saved · weights frozen"}
+  $("stale").textContent=stale&&!running?"The training text changed. Train again to learn it.":"";
+}
+function renderAll(){renderMatrix();renderStats();renderTokens();renderFile();renderSaveState();renderBadge();predict()}
+
+function train(){
+  if(running)return;
+  const n=Math.max(1,Math.min(1000,Math.round(+$("rounds").value||1)));$("rounds").value=n;
+  LR=Math.max(0.01,Math.min(5,+$("lr").value||0.5));$("lr").value=LR;
+  const added=syncVocab();renderTokens();
+  if(getPairs().length===0){$("stale").textContent="Add at least two words of training text.";return}
+  const before=W.map(r=>r.slice());running=true;renderBadge();
+  const pairIdx=getPairs().map(([a,b])=>[vocab.indexOf(a),vocab.indexOf(b)]);
+  let cap=0,worst=2;pairIdx.forEach(([x,y],k)=>{const q=softmax(W[x])[y];if(q<worst){worst=q;cap=k}});
+  const l0=currentLoss();lastEx=null;let firstRound=true;
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;let done=0;
+  const per=reduce?n:Math.max(1,Math.ceil(n/40));
+  const finish=()=>{running=false;trainedText=$("corpus").value.trim();dirtySinceSave=true;
+    const d=[];vocab.forEach((a,i)=>vocab.forEach((b,j)=>d.push({i,j,a,b,from:before[i][j],to:W[i][j],dv:W[i][j]-before[i][j]})));
+    d.sort((x,y)=>Math.abs(y.dv)-Math.abs(x.dv));const top=d.filter(x=>Math.abs(x.dv)>0.05).slice(0,6);
+    changed=new Set(top.map(x=>x.i+"_"+x.j));
+    $("changes").innerHTML=top.length?top.map(x=>`<li><span>${esc(x.a)} → ${esc(x.b)}</span><span class="${x.dv>0?"up":"down"}">${fmt(x.from,2)} → ${fmt(x.to,2)}</span></li>`).join(""):`<li class="empty">Weights barely moved. The model already fits this text.</li>`;
+    const l1=lossHist[lossHist.length-1];const np=getPairs().length;
+    let h=`<p>Went through all <b>${np}</b> token pairs ${n===1?"once":n+" times"} with learning rate ${LR}. For every pair: guess the next token from the current weights, check how wrong the guess was, nudge the weights a little.</p>`;
+    if(added.length)h+=`<p>New token${added.length>1?"s":""} ${added.map(w=>`<code>${esc(w)}</code>`).join(" ")} got a new row and column, filled with random starting numbers. The grid now holds ${vocab.length*vocab.length} weights.</p>`;
+    h+=`<p>Error (loss) went from <b>${fmt(l0,3)}</b> to <b>${fmt(l1,3)}</b>. `+(l1>l0+0.01?`It went up: the learning rate is too high, so the nudges overshoot. Try a smaller one.`:l0-l1<0.01?`Almost no change: the weights already fit this text, so more rounds add very little.`:`Lower error means the right next tokens now get higher chances.`)+`</p>`;
+    if(top.length)h+=`<p>Biggest change: <code>${esc(top[0].a)} → ${esc(top[0].b)}</code> went from ${fmt(top[0].from,2)} to ${fmt(top[0].to,2)} (green outline in the grid).</p>`;
+    h+=exampleHtml();
+    if(saved)h+=`<p>The saved file is not affected. Predictions keep using it until you save again.</p>`;
+    log("train",`Trained ${n} round${n>1?"s":""}`,h);
+    renderAll()};
+  const step=()=>{const k=Math.min(per,n-done);for(let s=0;s<k;s++){trainEpoch(firstRound?cap:-1);firstRound=false}done+=k;renderMatrix();renderStats();
+    if(done<n)setTimeout(step,40);else finish()};
+  step();
+}
+function save(){
+  if(running)return;
+  if(!epoch){$("saveState").style.color="var(--neg)";$("saveState").textContent="Train first. Untrained weights are just random numbers.";return}
+  const replaced=!!saved;
+  saved={vocab:vocab.slice(),W:W.map(r=>r.slice()),epoch};dirtySinceSave=false;renderAll();
+  const n=vocab.length;
+  log("save","Saved the model",`<p>Wrote all <b>${n*n}</b> weights (${n} tokens × ${n} tokens) and the vocabulary into <code>tiny_model.json</code>${replaced?", replacing the previous version":""}.</p>`+
+    `<p>This file is the trained model. Prediction loads it and treats it as frozen: reading it never changes a number. Training more only changes the weights in memory until the next save.</p>`);
+}
+function loadModel(text,name){
+  let m;try{m=JSON.parse(text)}catch(e){m=null}
+  const ok=m&&Array.isArray(m.vocab)&&Array.isArray(m.weights)&&m.weights.length===m.vocab.length&&m.weights.every(r=>Array.isArray(r)&&r.length===m.vocab.length&&r.every(v=>typeof v==="number"));
+  if(!ok){$("saveState").style.color="var(--neg)";$("saveState").textContent=`${name} isn't a model file. It needs "vocab" and a square "weights" grid.`;return}
+  vocab=m.vocab.map(String);W=m.weights.map(r=>r.slice());epoch=+m.rounds||0;lossHist=[];changed=new Set();
+  saved={vocab:vocab.slice(),W:W.map(r=>r.slice()),epoch};dirtySinceSave=false;trainedText=$("corpus").value.trim();
+  $("changes").innerHTML=`<li class="empty">Loaded from a file, no training yet in this session.</li>`;
+  buildMatrix();renderAll();
+  log("save",`Loaded ${name}`,`<p>Read ${vocab.length} tokens and ${vocab.length*vocab.length} weights from the file. These numbers were learned somewhere else (for example by <code>tiny_llm.py</code>), and now this page predicts with them unchanged.</p><p>Loading a model is how every LLM is used: the weights file is trained once, then copied and loaded wherever it runs.</p>`);
+}
+function sampling(){const T=+$("temp").value;const k=+$("topk").value;return{T,k}}
+function predict(){
+  const w=toLast();$("lastw").textContent=w;$("perr").textContent="";
+  const toks=tokenize($("prompt").value);$("out").innerHTML=toks.map(esc).join(" ");
+  $("mat").querySelectorAll("tbody tr").forEach(tr=>tr.classList.toggle("active",!!saved&&!dirtySinceSave&&tr.dataset.w===w));
+  const clear=msg=>{$("lookup").innerHTML="";$("bars").innerHTML="";$("perr").textContent=msg;return null};
+  if(!saved)return clear("No saved model to load. Train and save first.");
+  if(!w)return clear("Type a word to start.");
+  const i=saved.vocab.indexOf(w);
+  if(i<0)return clear(`"${w}" is not in the saved model's vocabulary, so it has no weights for it.`);
+  const{T,k}=sampling();const row=saved.W[i];const p=softmax(row,T);
+  const order=[...p.keys()].sort((a,b)=>p[b]-p[a]);const keep=k>0?order.slice(0,k):order;
+  const z=keep.reduce((a,j)=>a+p[j],0);const q=p.map((v,j)=>keep.includes(j)?v/z:0);
+  $("lookup").innerHTML=saved.vocab.map((v,j)=>`<span class="lk">${esc(v)} <b style="color:${row[j]>=0?"var(--pos)":"var(--neg)"}">${fmt(row[j],2)}</b></span>`).join("");
+  $("probHint").textContent=`Temperature ${T.toFixed(1)}, top-k ${k||"all"}. ${k>0&&k<saved.vocab.length?"Faded rows are cut by top-k and can't be picked.":"Every token can be picked."}`;
+  $("bars").innerHTML=order.slice(0,Math.max(6,Math.min(keep.length,8))).map((j,r)=>{const cut=!keep.includes(j);
+    return `<div class="bar-row${r===0?" top":""}${cut?" cut":""}"><span class="w">${esc(saved.vocab[j])}</span><div class="bar-track"><div class="bar-fill" style="width:${(q[j]*100).toFixed(1)}%"></div></div><span class="p">${pct(q[j])}</span></div>`}).join("");
+  return q;
+}
+function toLast(){const t=tokenize($("prompt").value);return t[t.length-1]||""}
+function addToken(steps){
+  const q=predict();if(!q)return false;
+  let x=Math.random(),s=0,k=q.indexOf(Math.max(...q));for(let j=0;j<q.length;j++){if(!q[j])continue;s+=q[j];if(x<=s){k=j;break}}
+  const w=toLast(),row=saved.W[saved.vocab.indexOf(w)];const{T,k:K}=sampling();
+  $("prompt").value=($("prompt").value.trim()+" "+saved.vocab[k]).trim();
+  if(steps)steps.push(`<code>${esc(w)}</code> → <code>${esc(saved.vocab[k])}</code> ${pct(q[k])}`);
+  else{const top=[...q.keys()].sort((i,j)=>q[j]-q[i]).slice(0,3).filter(j=>q[j]>0);
+    log("predict",`Predicted "${saved.vocab[k]}"`,`<p>Took the last token <code>${esc(w)}</code> and looked up its row in the saved weights. Softmax at temperature ${T.toFixed(1)}, keeping the top ${K||"all"}, turned those weights into chances:</p>`+
+      miniTable(`after "${w}"`,top.map(j=>saved.vocab[j]),[["weight",top.map(j=>fmt(row[j],2))],["chance",top.map(j=>pct(q[j]))]])+
+      `<p>${top.length===1?`Only one token was allowed, so it picked <code>${esc(saved.vocab[k])}</code>.`:`Picked at random, weighted by those chances: <code>${esc(saved.vocab[k])}</code> (${pct(q[k])}).`} The text is now "<b>${esc($("prompt").value)}</b>". No weights changed.</p>`)}
+  predict();
+  const out=$("out");const parts=out.innerHTML.split(" ");parts[parts.length-1]=`<span class="new">${parts[parts.length-1]}</span>`;out.innerHTML=parts.join(" ");
+  return true;
+}
+function addText(){const m=$("more");const t=m.value.trim();if(!t)return;
+  const before=getPairs().length;$("corpus").value=($("corpus").value.trim()+" "+t).trim();m.value="";renderTokens();renderBadge();
+  const fresh=[...new Set(tokenize(t).filter(w=>!vocab.includes(w)))];
+  log("info","Added training text",`<p>"${esc(t)}" adds <b>${getPairs().length-before}</b> new token pairs to learn from.${fresh.length?` New tokens: ${fresh.map(w=>`<code>${esc(w)}</code>`).join(" ")}.`:""}</p><p>The weights don't know any of this yet. Only training changes them.</p>`)}
+function resetWeights(quiet){if(running)return;seedState=SEED;vocab=[];W=[];epoch=0;lossHist=[];changed=new Set();trainedText="";
+  dirtySinceSave=saved!==null;$("changes").innerHTML=`<li class="empty">Nothing trained yet.</li>`;syncVocab();buildMatrix();renderAll();
+  if(!quiet)log("info","Weights reset",`<p>Every weight is back to a random number between −0.5 and 0.5. The model has forgotten everything it learned, so its guesses are random again.</p>`+(saved?`<p>The saved file is kept, so predictions still use the last saved model.</p>`:""))}
+
+$("trainBtn").onclick=train;$("saveBtn").onclick=save;
+$("addBtn").onclick=addText;$("more").onkeydown=e=>{if(e.key==="Enter")addText()};
+$("resetW").onclick=()=>resetWeights(false);
+$("clearAll").onclick=()=>{if(running)return;$("corpus").value="";$("prompt").value="";saved=null;resetWeights(true);dirtySinceSave=false;renderAll();
+  log("info","Everything cleared",`<p>Training text, weights and the saved file are gone. Type new text in Step 1 to build a new model.</p>`)};
+$("corpus").oninput=()=>{renderTokens();renderBadge()};
+$("prompt").oninput=predict;
+$("temp").oninput=()=>{$("tempOut").textContent=(+$("temp").value).toFixed(1);predict()};
+$("topk").onchange=predict;
+$("next").onclick=()=>addToken();
+$("gen").onclick=()=>{let n=0;const steps=[];const start=$("prompt").value.trim();const{T,k}=sampling();
+  const end=()=>{if(steps.length)log("predict",`Generated ${steps.length} tokens`,`<p>Started from "<b>${esc(start)}</b>" with temperature ${T.toFixed(1)} and top-k ${k||"all"}. Each step looked up the last token's row, turned it into chances, picked one, added it, and used it as the new last token:</p><p>${steps.join("<br>")}</p><p>Result: "<b>${esc($("prompt").value)}</b>". This loop of predict, add, repeat is how a language model writes longer text.</p>`)};
+  const tick=()=>{if(n++<6&&addToken(steps))setTimeout(tick,350);else end()};tick()};
+$("clearP").onclick=()=>{$("prompt").value="";predict()};
+$("copy").onclick=()=>{const t=$("file").textContent;const b=$("copy");
+  navigator.clipboard.writeText(t).then(()=>{b.textContent="Copied"},()=>{const r=document.createRange();r.selectNodeContents($("file"));const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Selected, press Ctrl+C"});
+  setTimeout(()=>b.textContent="Copy",2000)};
+$("download").onclick=async()=>{if(!saved){$("saveState").style.color="var(--neg)";$("saveState").textContent="Save the model first.";return}
+  const text=fileText(saved);const dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;
+  if(dl){try{await dl.save({filename:"tiny_model.json",data:text})}catch(e){if(e&&e.code!=="declined"){$("saveState").style.color="var(--neg)";$("saveState").textContent="Download isn't available here. Use Copy instead."}}return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"application/json"}));a.download="tiny_model.json";
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)};
+$("loadFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadModel(r.result,f.name);r.readAsText(f);e.target.value=""};
+function setExplain(open){$("layout").classList.toggle("open",open);$("explainToggle").setAttribute("aria-expanded",String(open));
+  try{localStorage.setItem("tll-explain",open?"1":"0")}catch(e){}}
+$("explainToggle").onclick=()=>setExplain(!$("layout").classList.contains("open"));
+$("explainClose").onclick=()=>setExplain(false);
+
+syncVocab();buildMatrix();renderAll();
+(()=>{let pref=null;try{pref=localStorage.getItem("tll-explain")}catch(e){}
+  setExplain(pref?pref==="1":!!(window.matchMedia&&matchMedia("(min-width: 1061px)").matches))})();
+log("info","A new, untrained model",`<p>The tokenizer split the training text into tokens (here, one token per word or punctuation mark) and gave each different token an ID. There are <b>${vocab.length}</b>, so the model is a grid of ${vocab.length} × ${vocab.length} = <b>${vocab.length*vocab.length}</b> weights.</p><p>Each row is a token the model sees, each column a token that could come next. Right now every weight is a random number, so the model knows nothing and its guesses would be random.</p>`);
+</script>
+</body>
+</html>
