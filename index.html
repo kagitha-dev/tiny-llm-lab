@@ -450,7 +450,7 @@ function addToken(steps){
   return true;
 }
 function addText(){const m=$("more");const t=m.value.trim();if(!t)return;
-  const before=getPairs().length;$("corpus").value=($("corpus").value.trim()+" "+t).trim();m.value="";renderTokens();renderBadge();
+  const before=getPairs().length;$("corpus").value=($("corpus").value.trim()+" "+t).trim();m.value="";renderTokens();renderBadge();shareText();
   const fresh=[...new Set(tokenize(t).filter(w=>!vocab.includes(w)))];
   log("info","Added training text",`<p>"${esc(t)}" adds <b>${getPairs().length-before}</b> new token pairs to learn from.${fresh.length?` New tokens: ${fresh.map(w=>`<code>${esc(w)}</code>`).join(" ")}.`:""}</p><p>The weights don't know any of this yet. Only training changes them.</p>`)}
 function resetWeights(quiet){if(running)return;seedState=SEED;vocab=[];W=[];epoch=0;lossHist=[];changed=new Set();trainedText="";
@@ -460,9 +460,10 @@ function resetWeights(quiet){if(running)return;seedState=SEED;vocab=[];W=[];epoc
 $("trainBtn").onclick=train;$("saveBtn").onclick=save;
 $("addBtn").onclick=addText;$("more").onkeydown=e=>{if(e.key==="Enter")addText()};
 $("resetW").onclick=()=>resetWeights(false);
-$("clearAll").onclick=()=>{if(running)return;$("corpus").value="";$("prompt").value="";saved=null;resetWeights(true);dirtySinceSave=false;renderAll();
+$("clearAll").onclick=()=>{if(running)return;$("corpus").value="";$("prompt").value="";saved=null;resetWeights(true);dirtySinceSave=false;renderAll();shareText();
   log("info","Everything cleared",`<p>Training text, weights and the saved file are gone. Type new text in Step 1 to build a new model.</p>`)};
-$("corpus").oninput=()=>{renderTokens();renderBadge()};
+function shareText(){try{localStorage.setItem("tll-corpus",$("corpus").value)}catch(e){}}
+$("corpus").oninput=()=>{renderTokens();renderBadge();shareText()};
 $("prompt").oninput=predict;
 $("temp").oninput=()=>{$("tempOut").textContent=(+$("temp").value).toFixed(1);predict()};
 $("topk").onchange=predict;
@@ -485,7 +486,7 @@ function setExplain(open){$("layout").classList.toggle("open",open);$("explainTo
 $("explainToggle").onclick=()=>setExplain(!$("layout").classList.contains("open"));
 $("explainClose").onclick=()=>setExplain(false);
 
-syncVocab();buildMatrix();renderAll();
+syncVocab();buildMatrix();renderAll();shareText();
 (()=>{let pref=null;try{pref=localStorage.getItem("tll-explain")}catch(e){}
   setExplain(pref?pref==="1":!!(window.matchMedia&&matchMedia("(min-width: 1061px)").matches))})();
 log("info","A new, untrained model",`<p>The tokenizer split the training text into tokens (here, one token per word or punctuation mark) and gave each different token an ID. There are <b>${vocab.length}</b>, so the model is a grid of ${vocab.length} × ${vocab.length} = <b>${vocab.length*vocab.length}</b> weights.</p><p>Each row is a token the model sees, each column a token that could come next. Right now every weight is a random number, so the model knows nothing and its guesses would be random.</p>`);
