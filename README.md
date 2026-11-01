@@ -17,7 +17,7 @@ The three labs build on each other:
 | Lab | What it shows |
 |---|---|
 | `index.html`: 1 · Tiny LLM Lab | What a model does. Train a model on any text and watch its weight grid change, save the weights to a file, then freeze them and predict the next token with temperature and top-k. A side panel explains every step with the real numbers. |
-| `tokens.html`: 2 · Text to numbers | How text reaches the weights. Your sentence goes through seven steps: characters, clean-up, subword tokens (byte-pair encoding), IDs, one-hot lists, a row of the embedding weights, and the input grid. Also shows GPT-4o's real tokenizer on the same text, and a map where embeddings are learned. |
+| `tokens.html`: 2 · Text to numbers | How text reaches the weights. Your sentence goes through six steps: characters, clean-up, subword tokens (byte-pair encoding), IDs, a row read from the embedding weights, and the input grid. Also shows GPT-4o's real tokenizer on the same text, and a map where embeddings are learned. |
 | `transformer.html`: 3 · Transformer | How it all connects. A real one-block transformer trained in the browser. Follow a prompt through every block (embeddings, positions, attention, feed-forward, output, softmax), each tagged with the lab that covered it, and see where it beats the last-token-only model. |
 
 Open `index.html` in a browser to start. Each page is a single self-contained HTML file; Lab 2 loads the GPT-4o tokenizer from a CDN.
