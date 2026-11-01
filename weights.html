@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>How a Weight Is Made</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one knob is the hero. Three stations follow its life: training turns it, saving locks it, a prompt reads it. The dial stays the same visual in each station */
+:root{
+  --bg:#f2f4f7; --panel:#ffffff; --ink:#152033; --muted:#5a6578; --line:#d9dfe8; --cell:#edf0f5;
+  --pos:#1d63c9; --neg:#d0532a; --good:#18805a; --warn:#a86a00; --on-strong:#ffffff;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d131e; --panel:#151d2b; --ink:#e5ebf4; --muted:#95a1b5; --line:#283346; --cell:#1b2434;
+  --pos:#5b9dff; --neg:#ff8656; --good:#45cf95; --warn:#f0b13c; --on-strong:#0d131e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d131e; --panel:#151d2b; --ink:#e5ebf4; --muted:#95a1b5; --line:#283346; --cell:#1b2434;
+  --pos:#5b9dff; --neg:#ff8656; --good:#45cf95; --warn:#f0b13c; --on-strong:#0d131e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;margin:0;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+nav.pages{display:flex;gap:6px;flex-wrap:wrap;font:600 14px var(--body)}
+nav.pages a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
+nav.pages a:hover{color:var(--ink);border-color:var(--muted)}
+nav.pages a[aria-current="page"]{color:var(--on-strong);background:var(--ink);border-color:var(--ink)}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:8px 0 0;max-width:64ch}
+.trip{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;font:600 14px var(--body)}
+.trip span{padding:7px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+.trip span b{font-family:var(--mono);color:var(--pos);margin-right:6px}
+.trip i{font-style:normal;color:var(--muted)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;min-width:0}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.step{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pos);font-weight:600}
+h2{font-family:var(--display);font-weight:700;font-size:26px;margin:0;text-wrap:balance}
+.lead{margin:0 0 16px;max-width:66ch;color:var(--muted)}
+.lead b{color:var(--ink);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button{font:600 15px var(--body);color:var(--ink);background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:10px 16px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--pos);border-color:var(--pos);color:var(--on-strong)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--pos);outline-offset:2px}
+code{font:600 13px var(--mono);background:var(--cell);border-radius:4px;padding:1px 5px}
+.small{font-size:14px;color:var(--muted);margin:8px 0 0}
+.small b{color:var(--ink)}
+.tag{font:600 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:5px;border:1px solid currentColor;white-space:nowrap}
+.tag.turn{color:var(--warn)} .tag.lock{color:var(--good)} .tag.read{color:var(--pos)}
+
+/* knob */
+.hero{display:grid;grid-template-columns:260px minmax(0,1fr);gap:24px;align-items:center}
+@media (max-width:760px){.hero{grid-template-columns:minmax(0,1fr)}}
+.dial{display:flex;flex-direction:column;align-items:center;gap:4px}
+.dial svg{width:240px;max-width:100%;height:auto;display:block}
+.dial .val{font:700 34px var(--mono);font-variant-numeric:tabular-nums;line-height:1}
+.dial .cap{font:13px var(--mono);color:var(--muted)}
+.needle{transition:transform .35s ease;transform-origin:120px 120px}
+.dial text{font:11px var(--mono);fill:var(--muted)}
+.where{display:flex;flex-direction:column;gap:10px}
+.where p{margin:0;max-width:60ch}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--cell);border-radius:10px;padding:10px 12px}
+.stat span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.stat strong{font:600 20px var(--mono);font-variant-numeric:tabular-nums}
+
+/* training cards */
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px}
+@media (max-width:900px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.cards{grid-template-columns:minmax(0,1fr)}}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column;gap:6px;min-width:0}
+.card .k{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card .big{font:700 24px var(--mono);font-variant-numeric:tabular-nums;line-height:1.15;word-break:break-word}
+.card p{margin:0;font-size:14px;color:var(--muted)}
+.card p b{color:var(--ink)}
+.card.hl{border-color:var(--warn);background:color-mix(in oklab,var(--warn) 8%,var(--panel))}
+.eq{font:600 15px var(--mono);font-variant-numeric:tabular-nums}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;margin-top:16px}
+.chart{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--bg)}
+.chart h3{font:600 14px var(--body);margin:0 0 6px;display:flex;justify-content:space-between}
+.chart h3 span{font-family:var(--mono);color:var(--muted);font-weight:400}
+.chart svg{display:block;width:100%;height:120px}
+.chart text{font:11px var(--mono);fill:var(--muted)}
+.others{margin-top:12px;font-size:14px;color:var(--muted)}
+
+/* save */
+.saved{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.file{font:14px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 14px;flex:1;min-width:0;overflow-x:auto;white-space:nowrap}
+.file b{color:var(--good)}
+
+/* prompt */
+.path{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-size:15px}
+.prow .num{font:700 18px var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.prow.knob{border-color:var(--pos);background:color-mix(in oklab,var(--pos) 8%,var(--panel))}
+.prow.res{border-color:var(--ink)}
+.prow small{display:block;color:var(--muted);font-size:13px}
+.wiggle{margin-top:18px;border:1px dashed var(--muted);border-radius:12px;padding:16px}
+.wiggle h3{font:700 19px var(--display);margin:0 0 4px}
+.wiggle input[type=range]{width:100%;accent-color:var(--pos)}
+.wig-out{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+.bars{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.bar-row{display:grid;grid-template-columns:72px minmax(0,1fr) 62px;align-items:center;gap:10px;font-family:var(--mono)}
+.bar-row .w{text-align:right;font-size:15px;font-weight:600}
+.bar-track{height:22px;background:var(--cell);border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;background:var(--pos);opacity:.5;border-radius:6px;transition:width .2s}
+.bar-row.top .bar-fill{opacity:1}
+.bar-row .p{font-size:14px;text-align:right;font-variant-numeric:tabular-nums}
+.locked{font-size:14px;color:var(--good);margin:12px 0 0}
+
+/* scale */
+.scale-wrap{overflow-x:auto}
+table.scale{border-collapse:collapse;width:100%;font:15px var(--body)}
+.scale th,.scale td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.scale thead th{font:600 13px var(--body);color:var(--muted)}
+.scale td:first-child{color:var(--muted);white-space:nowrap}
+.scale td.me{font-family:var(--mono);color:var(--pos);white-space:nowrap}
+.foot{color:var(--muted);font-size:14px;max-width:84ch;margin:0}
+.foot a{color:var(--pos)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="pages" aria-label="Pages"><a href="index.html">1 · Tiny LLM Lab</a><a href="tokens.html">2 · Text to numbers</a><a href="transformer.html">3 · Transformer</a><a href="weights.html" aria-current="page">4 · How a weight is made</a></nav>
+  <header>
+    <h1>How a weight is made</h1>
+    <p class="sub">Think of a model as a machine covered in knobs. Each knob is one weight: a single number. Follow one real knob from the transformer in Lab 3 through its whole life.</p>
+    <div class="trip" aria-label="The round trip"><span><b>1</b>Training turns it</span><i>→</i><span><b>2</b>Saving locks it</span><i>→</i><span><b>3</b>A prompt reads it</span></div>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="step">Meet the knob</span><h2 id="knobTitle">Knob</h2></div>
+    <div class="hero">
+      <div class="dial" id="dial1"></div>
+      <div class="where">
+        <p id="whereText"></p>
+        <div class="facts">
+          <div class="stat"><span>Knobs in this model</span><strong id="fCount">–</strong></div>
+          <div class="stat"><span>In GPT-2</span><strong>124 million</strong></div>
+          <div class="stat"><span>Starting value</span><strong id="fStart">–</strong></div>
+        </div>
+        <p class="small" style="margin:0">Every knob starts as a small random number, so the model knows nothing. Nobody ever types a value in. We picked a knob that ends up mattering for "River likes Ruby"; all of them are made the same way.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="tag turn">1 · Turn</span><h2>Training turns the knob, step by step</h2></div>
+    <p class="lead">Training text: <b>"My puppy name is River. River likes Ruby. Ruby likes River."</b> Each step, the model reads all of it, and every knob is turned a little.</p>
+    <div class="row">
+      <button class="primary" id="t1">Train 1 step</button>
+      <button id="t10">Train 10 steps</button>
+      <button id="tAll">Train to the end</button>
+      <button id="tReset">Start over</button>
+      <span class="small" id="stepLbl" style="margin:0"></span>
+    </div>
+    <div class="cards" id="cards"></div>
+    <p class="others" id="others"></p>
+    <div class="charts">
+      <div class="chart"><h3>The knob's value <span id="cVal"></span></h3><svg id="chartKnob" viewBox="0 0 400 120" preserveAspectRatio="none" role="img" aria-label="Knob value over training steps"></svg></div>
+      <div class="chart"><h3>The model's error <span id="cErr"></span></h3><svg id="chartErr" viewBox="0 0 400 120" preserveAspectRatio="none" role="img" aria-label="Error over training steps"></svg></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="tag lock">2 · Lock</span><h2>Saving locks the knob</h2></div>
+    <p class="lead">When training ends, every knob's value is written into the weights file. From now on the values are frozen.</p>
+    <div class="saved">
+      <button class="primary" id="saveBtn">Save the model</button>
+      <div class="file" id="fileLine">No saved model yet.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="tag read">3 · Read</span><h2>A prompt reads the knob</h2></div>
+    <p class="lead">Prompt: <b>"River likes"</b>. The model runs the prompt through all its knobs. Here is exactly where this knob is used.</p>
+    <div id="readArea"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="step">Real models</span><h2>Same life, much bigger</h2></div>
+    <div class="scale-wrap"><table class="scale">
+      <thead><tr><th></th><th>This lab</th><th>A real LLM</th></tr></thead>
+      <tbody>
+        <tr><td>Knobs</td><td class="me" id="sCount">–</td><td>Billions (GPT-2 small: 124 million; Llama 3 8B: 8 billion)</td></tr>
+        <tr><td>Start</td><td class="me">random numbers</td><td>Random numbers too</td></tr>
+        <tr><td>Text per step</td><td class="me">3 sentences</td><td>Millions of tokens</td></tr>
+        <tr><td>Steps</td><td class="me">200</td><td>Hundreds of thousands or more, on thousands of GPUs for weeks</td></tr>
+        <tr><td>Blame</td><td class="me">traced backwards</td><td>The same method (backpropagation)</td></tr>
+        <tr><td>Turning rule</td><td class="me">old − 0.3 × blame</td><td>The same idea, with a smarter version (AdamW) that smooths each knob's turns using its recent history</td></tr>
+        <tr><td>After training</td><td class="me">saved, frozen, read</td><td>Exactly the same</td></tr>
+      </tbody></table></div>
+  </section>
+
+  <p class="foot">A simplified model for understanding: Lab 3's one-block transformer, trained with plain gradient descent so every number on this page can be checked by hand. Back to <a href="index.html">the Tiny LLM Lab</a>.</p>
+</div>
+
+<script>
+/* MINI-TRANSFORMER-START */
+/* A one-layer, one-head transformer with token + position embeddings, causal self-attention,
+   a feed-forward network, residual connections and an output layer. Plain JS, manual backprop, Adam. */
+function MiniTransformer(V,opt){
+  opt=opt||{};const d=opt.d||16,f=opt.f||32,maxPos=opt.maxPos||16;let s=opt.seed||3;
+  const rnd=()=>{s|=0;s=s+0x6D2B79F5|0;let q=Math.imul(s^s>>>15,1|s);q=q+Math.imul(q^q>>>7,61|q)^q;return((q^q>>>14)>>>0)/4294967296};
+  const gauss=()=>{const u=rnd()||1e-9,v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+  const mat=(r,c,sc)=>Array.from({length:r},()=>Array.from({length:c},()=>sc?gauss()*sc:0));
+  const P={E:mat(V,d,.3),P:mat(maxPos,d,.1),Wq:mat(d,d,1/Math.sqrt(d)),Wk:mat(d,d,1/Math.sqrt(d)),Wv:mat(d,d,1/Math.sqrt(d)),
+    Wo:mat(d,d,1/Math.sqrt(d)),W1:mat(d,f,1/Math.sqrt(d)),c1:[Array(f).fill(0)],W2:mat(f,d,1/Math.sqrt(f)),c2:[Array(d).fill(0)],
+    U:mat(d,V,1/Math.sqrt(d)),b:[Array(V).fill(0)]};
+  const names=Object.keys(P);
+  const zeros=()=>Object.fromEntries(names.map(n=>[n,P[n].map(r=>r.map(()=>0))]));
+  const M=zeros(),S=zeros();let step=0;
+  const vm=(x,W)=>{const o=Array(W[0].length).fill(0);for(let i=0;i<x.length;i++){const xi=x[i];if(!xi)continue;const Wi=W[i];for(let j=0;j<o.length;j++)o[j]+=xi*Wi[j]}return o};
+  const mvT=(W,g)=>W.map(Wi=>{let a=0;for(let j=0;j<g.length;j++)a+=Wi[j]*g[j];return a});
+  const outer=(G,x,g)=>{for(let i=0;i<x.length;i++){const xi=x[i];if(!xi)continue;const Gi=G[i];for(let j=0;j<g.length;j++)Gi[j]+=xi*g[j]}};
+  const add=(a,b)=>a.map((v,i)=>v+b[i]);
+  const dot=(a,b)=>{let t=0;for(let i=0;i<a.length;i++)t+=a[i]*b[i];return t};
+  const softmax=r=>{const m=Math.max(...r);const e=r.map(v=>Math.exp(v-m));const z=e.reduce((a,c)=>a+c,0);return e.map(v=>v/z)};
+  function forward(ids){
+    const n=ids.length,sc=1/Math.sqrt(d);
+    const tok=ids.map(i=>P.E[i].slice()),pos=ids.map((_,t)=>P.P[Math.min(t,maxPos-1)].slice());
+    const x=tok.map((e,t)=>add(e,pos[t]));
+    const q=x.map(r=>vm(r,P.Wq)),k=x.map(r=>vm(r,P.Wk)),v=x.map(r=>vm(r,P.Wv));
+    const A=[],ctx=[];
+    for(let t=0;t<n;t++){const sc_=[];for(let u=0;u<=t;u++)sc_.push(dot(q[t],k[u])*sc);const a=softmax(sc_);A.push(a);
+      const c=Array(d).fill(0);for(let u=0;u<=t;u++)for(let j=0;j<d;j++)c[j]+=a[u]*v[u][j];ctx.push(c)}
+    const att=ctx.map(c=>vm(c,P.Wo)),h1=x.map((r,t)=>add(r,att[t]));
+    const z=h1.map(r=>add(vm(r,P.W1),P.c1[0])),relu=z.map(r=>r.map(v=>v>0?v:0));
+    const m=relu.map(r=>add(vm(r,P.W2),P.c2[0])),h2=h1.map((r,t)=>add(r,m[t]));
+    const logits=h2.map(r=>add(vm(r,P.U),P.b[0])),probs=logits.map(softmax);
+    return{ids,tok,pos,x,q,k,v,A,ctx,att,h1,z,relu,m,h2,logits,probs};
+  }
+  function lossGrad(seqs,G){
+    let L=0,N=0;seqs.forEach(sq=>N+=sq.length-1);
+    for(const ids of seqs){const F=forward(ids),n=ids.length,sc=1/Math.sqrt(d);
+      const dh2=[];for(let t=0;t<n;t++){
+        if(t<n-1){const p=F.probs[t];L-=Math.log(p[ids[t+1]]);const g=p.map((v,j)=>(v-(j===ids[t+1]?1:0))/N);
+          if(G){outer(G.U,F.h2[t],g);for(let j=0;j<g.length;j++)G.b[0][j]+=g[j]}dh2.push(mvT(P.U,g))}else dh2.push(Array(d).fill(0))}
+      if(!G)continue;
+      const dh1=[],dx=[],dctx=[];
+      for(let t=0;t<n;t++){const dm=dh2[t];outer(G.W2,F.relu[t],dm);for(let j=0;j<d;j++)G.c2[0][j]+=dm[j];
+        const dr=mvT(P.W2,dm),dz=dr.map((v,j)=>F.z[t][j]>0?v:0);outer(G.W1,F.h1[t],dz);for(let j=0;j<f;j++)G.c1[0][j]+=dz[j];
+        const g1=add(dh2[t],mvT(P.W1,dz));dh1.push(g1);outer(G.Wo,F.ctx[t],g1);dctx.push(mvT(P.Wo,g1));dx.push(g1.slice())}
+      const dq=F.q.map(()=>Array(d).fill(0)),dk=F.k.map(()=>Array(d).fill(0)),dv=F.v.map(()=>Array(d).fill(0));
+      for(let t=0;t<n;t++){const a=F.A[t];const da=[];for(let u=0;u<=t;u++){da.push(dot(dctx[t],F.v[u]));for(let j=0;j<d;j++)dv[u][j]+=a[u]*dctx[t][j]}
+        const sm=a.reduce((acc,au,u)=>acc+au*da[u],0);
+        for(let u=0;u<=t;u++){const ds=a[u]*(da[u]-sm)*sc;for(let j=0;j<d;j++){dq[t][j]+=ds*F.k[u][j];dk[u][j]+=ds*F.q[t][j]}}}
+      for(let t=0;t<n;t++){outer(G.Wq,F.x[t],dq[t]);outer(G.Wk,F.x[t],dk[t]);outer(G.Wv,F.x[t],dv[t]);
+        const g=add(add(dx[t],mvT(P.Wq,dq[t])),add(mvT(P.Wk,dk[t]),mvT(P.Wv,dv[t])));
+        const Ei=G.E[ids[t]],Pi=G.P[Math.min(t,maxPos-1)];for(let j=0;j<d;j++){Ei[j]+=g[j];Pi[j]+=g[j]}}
+    }
+    return L/Math.max(N,1);
+  }
+  function trainStep(seqs,lr){
+    const G=zeros();const L=lossGrad(seqs,G);step++;const b1=.9,b2=.999,eps=1e-8;
+    for(const n of names){const p=P[n],g=G[n],m=M[n],s2=S[n];
+      for(let i=0;i<p.length;i++)for(let j=0;j<p[i].length;j++){const gg=g[i][j];m[i][j]=b1*m[i][j]+(1-b1)*gg;s2[i][j]=b2*s2[i][j]+(1-b2)*gg*gg;
+        p[i][j]-=(lr||0.02)*(m[i][j]/(1-Math.pow(b1,step)))/(Math.sqrt(s2[i][j]/(1-Math.pow(b2,step)))+eps)}}
+    return L;
+  }
+  const count=()=>names.reduce((a,n)=>a+P[n].length*P[n][0].length,0);
+  return{P,d,f,maxPos,forward,lossGrad,trainStep,zeros,count,get steps(){return step}};
+}
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const normalize=t=>t.toLowerCase().replace(/([.,!?;:])/g," $1 ").split(/\s+/).filter(Boolean);
+const TEXT="My puppy name is River. River likes Ruby. Ruby likes River.";
+const LR=0.3,TOTAL=200,SEED=3;
+const words=normalize(TEXT),vocab=["<start>",...new Set(words)];
+const seqs=[];{let s=[0];words.forEach(w=>{s.push(vocab.indexOf(w));if(w==="."){seqs.push(s);s=[0]}})}
+const RUBY=vocab.indexOf("ruby"),RIVER=vocab.indexOf("river"),LIKES=vocab.indexOf("likes");
+const PROMPT=[0,RIVER,LIKES];
+let model,K,step=0,hist=[],errs=[],last=null,saved=null,busy=false;
+
+/* pick the knob: the output weight that ends up adding most to ruby's score after "river likes" */
+function sgdStep(m){const G=m.zeros();const L=m.lossGrad(seqs,G);for(const n in m.P)m.P[n].forEach((r,i)=>r.forEach((_,j)=>r[j]-=LR*G[n][i][j]));return{G,L}}
+(function pick(){const m=MiniTransformer(vocab.length,{seed:SEED});for(let s=0;s<TOTAL;s++)sgdStep(m);
+  const h=m.forward(PROMPT).h2[2];const c=h.map((v,k)=>v*m.P.U[k][RUBY]);K=c.indexOf(Math.max(...c))})();
+const knob=m=>m.P.U[K][RUBY];
+function knobNumber(m){let n=0;for(const name of Object.keys(m.P)){if(name==="U")return n+K*vocab.length+RUBY+1;n+=m.P[name].length*m.P[name][0].length}}
+const f=(v,d=3)=>{const s=v.toFixed(d);return/^-0\.0+$/.test(s)?s.slice(1):s};
+const sg=(v,d=3)=>(v>=0?"+":"−")+Math.abs(v).toFixed(d);
+const pct=v=>(v*100).toFixed(v>0.999||v<0.001?0:1)+"%";
+
+/* ---------- dial ---------- */
+const RANGE=3;
+function dialSVG(v,label){
+  const a=Math.max(-1,Math.min(1,v/RANGE))*90;
+  const tick=(t)=>{const r=(t/RANGE)*90*Math.PI/180;return[120+Math.sin(r)*96,120-Math.cos(r)*96,120+Math.sin(r)*108,120-Math.cos(r)*108]};
+  const ticks=[-3,-2,-1,0,1,2,3].map(t=>{const[x1,y1,x2,y2]=tick(t);const r=(t/RANGE)*90*Math.PI/180;
+    return`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="${t===0?2:1}"/><text x="${120+Math.sin(r)*84}" y="${124-Math.cos(r)*84}" text-anchor="middle">${t}</text>`}).join("");
+  return`<svg viewBox="0 0 240 140" aria-hidden="true"><path d="M12 120 A108 108 0 0 1 228 120" fill="none" stroke="var(--line)" stroke-width="14" stroke-linecap="round"/>
+    <path d="M120 12 A108 108 0 0 1 228 120" fill="none" stroke="color-mix(in oklab,var(--pos) 25%,var(--line))" stroke-width="14" stroke-linecap="round"/>
+    <path d="M12 120 A108 108 0 0 1 120 12" fill="none" stroke="color-mix(in oklab,var(--neg) 25%,var(--line))" stroke-width="14" stroke-linecap="round"/>
+    ${ticks}<g class="needle" style="transform:rotate(${a}deg)"><line x1="120" y1="120" x2="120" y2="30" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/></g>
+    <circle cx="120" cy="120" r="9" fill="var(--ink)"/></svg><div class="val">${f(v)}</div><div class="cap">${label}</div>`;
+}
+function setDial(id,v,label){const el=$(id);const nd=el.querySelector(".needle");
+  if(nd&&el.dataset.ready){nd.style.transform=`rotate(${Math.max(-1,Math.min(1,v/RANGE))*90}deg)`;el.querySelector(".val").textContent=f(v);el.querySelector(".cap").textContent=label}
+  else{el.innerHTML=dialSVG(v,label);el.dataset.ready="1"}}
+
+/* ---------- training ---------- */
+function reset(){model=MiniTransformer(vocab.length,{seed:SEED});step=0;hist=[knob(model)];errs=[model.lossGrad(seqs)];last=null;saved=null;renderAll()}
+function trainSteps(n){
+  for(let i=0;i<n&&step<TOTAL;i++){
+    const before=knob(model);const F=model.forward(PROMPT);const chance=F.probs[2][RUBY];
+    const{G,L}=sgdStep(model);step++;
+    let biggest=0;for(const nm in G)G[nm].forEach(r=>r.forEach(g=>{if(Math.abs(LR*g)>biggest)biggest=Math.abs(LR*g)}));
+    last={before,after:knob(model),blame:G.U[K][RUBY],chance,L,biggest};hist.push(knob(model));errs.push(model.lossGrad(seqs));
+  }
+  saved=null;renderAll();
+}
+function run(n,delay){if(busy)return;busy=true;let done=0;const per=Math.max(1,Math.ceil(n/40));
+  const tick=()=>{trainSteps(Math.min(per,n-done));done+=per;if(done<n&&step<TOTAL)setTimeout(tick,delay);else busy=false};tick()}
+
+function renderCards(){
+  const c=$("cards");
+  if(!last){c.innerHTML=`<div class="card" style="grid-column:1/-1"><p>Click <b>Train 1 step</b> to watch the knob get its first turn. Each step has the same four parts.</p></div>`;$("others").textContent="";return}
+  const up=last.blame<0;
+  c.innerHTML=`
+   <div class="card"><span class="k">1 · Guess</span><span class="big">${pct(last.chance)}</span><p>The model reads the text. After <b>"river likes"</b> it gave <b>ruby</b> this chance. It should be 100%.</p></div>
+   <div class="card"><span class="k">2 · Error</span><span class="big">${f(last.L)}</span><p>One number for how wrong all the guesses in the text were. Lower is better.</p></div>
+   <div class="card hl"><span class="k">3 · Blame (the gradient)</span><span class="big">${sg(last.blame,4)}</span><p>Traced backwards from the error to this knob. ${up?"<b>Negative</b>: turning it <b>up</b> would lower the error.":"<b>Positive</b>: turning it <b>down</b> would lower the error."} Bigger number, bigger share of the blame.</p></div>
+   <div class="card hl"><span class="k">4 · Turn</span><span class="eq">${f(last.before)} − 0.3 × (${sg(last.blame,4)})</span><span class="big">= ${f(last.after)}</span><p>Old value minus learning rate × blame. A small turn ${up?"up":"down"}.</p></div>`;
+  $("others").innerHTML=`In the same step, all other ${(model.count()-1).toLocaleString("en-US")} knobs were turned too, each by its own blame. The biggest turn this step was ${f(last.biggest,3)}.`;
+}
+function lineChart(svg,data,color,fmt){
+  const W=400,H=120,p=8;if(data.length<2){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle">Train to draw the line</text>`;return}
+  const lo=Math.min(...data),hi=Math.max(...data),span=hi-lo||1;const x=i=>p+i/(TOTAL)*(W-2*p),y=v=>H-p-(v-lo)/span*(H-2*p-14);
+  svg.innerHTML=`<line x1="${p}" y1="${H-p}" x2="${W-p}" y2="${H-p}" stroke="var(--line)"/><text x="${W-p}" y="${H-p-4}" text-anchor="end">step ${data.length-1}</text>`+
+    `<polyline points="${data.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}" fill="none" stroke="${color}" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`+
+    `<circle cx="${x(data.length-1)}" cy="${y(data[data.length-1])}" r="4" fill="${color}"/>`;
+}
+function renderTrain(){
+  renderCards();setDial("dial1",knob(model),step?`after ${step} step${step>1?"s":""}`:"random start");
+  $("stepLbl").textContent=`Step ${step} of ${TOTAL}`;
+  ["t1","t10","tAll"].forEach(id=>$(id).disabled=step>=TOTAL);
+  lineChart($("chartKnob"),hist,"var(--pos)");lineChart($("chartErr"),errs,"var(--neg)");
+  $("cVal").textContent=`${f(hist[0])} → ${f(hist[hist.length-1])}`;$("cErr").textContent=`${f(errs[0])} → ${f(errs[errs.length-1])}`;
+}
+
+/* ---------- save ---------- */
+function renderSave(){
+  $("fileLine").innerHTML=saved?`weights file · knob #${knobNumber(model).toLocaleString("en-US")} = <b>${f(saved.v)}</b> · saved after ${saved.step} steps · frozen`:
+    (step?`Trained for ${step} steps but not saved yet.`:`No saved model yet. Train first.`);
+  $("saveBtn").disabled=!step;
+}
+
+/* ---------- read ---------- */
+let wig=null;
+function readHTML(){
+  if(!saved)return`<p class="small">Save the model first. A prompt always uses the saved, frozen knobs.</p>`;
+  const m=saved.m;const kv=wig===null?saved.v:wig;const keep=m.P.U[K][RUBY];m.P.U[K][RUBY]=kv;
+  const F=m.forward(PROMPT);m.P.U[K][RUBY]=keep;
+  const h=F.h2[2][K],contrib=h*kv,score=F.logits[2][RUBY],rest=score-contrib,p=F.probs[2];
+  const order=p.map((v,i)=>[i,v]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  return{h,kv,contrib,score,rest,p,order};
+}
+function renderRead(){
+  const r=readHTML();const A=$("readArea");
+  if(typeof r==="string"){A.innerHTML=r;return}
+  const bars=r.order.map(([i,v],k)=>`<div class="bar-row${k===0?" top":""}"><span class="w">${esc(vocab[i])}</span><div class="bar-track"><div class="bar-fill" style="width:${(v*100).toFixed(1)}%"></div></div><span class="p">${pct(v)}</span></div>`).join("");
+  if(!A.dataset.built){
+    A.innerHTML=`<div class="path">
+      <div class="prow"><span>After all the layers, the last token <b>"likes"</b> is ${model.d} numbers. Number ${K+1} of them is<small>computed from the prompt by the other knobs</small></span><span class="num" id="rH"></span></div>
+      <div class="prow knob"><span><b>× this knob</b><small>read from the saved file, never changed</small></span><span class="num" id="rK"></span></div>
+      <div class="prow"><span>= this knob's share of <b>ruby</b>'s score</span><span class="num" id="rC"></span></div>
+      <div class="prow"><span>+ the shares from the other ${model.d-1} numbers and their knobs, plus a bias</span><span class="num" id="rR"></span></div>
+      <div class="prow res"><span>= <b>ruby</b>'s score. Softmax turns all the scores into chances:</span><span class="num" id="rS"></span></div></div>
+      <div class="bars" id="rBars"></div>
+      <div class="wiggle"><h3>Wiggle the knob</h3><p class="small" style="margin:0 0 10px">Turn it by hand and watch the prediction change. This is only for exploring: a real prompt never moves a knob.</p>
+        <input type="range" id="wig" min="-3" max="3" step="0.05" aria-label="Knob value">
+        <div class="row" style="margin-top:8px"><span class="small" id="wigLbl" style="margin:0"></span><button id="wigReset">Put it back</button></div></div>
+      <p class="locked" id="locked"></p>`;
+    A.dataset.built="1";
+    $("wig").oninput=()=>{wig=+$("wig").value;renderRead()};$("wigReset").onclick=()=>{wig=null;renderRead()};
+  }
+  $("rH").textContent=f(r.h);$("rK").textContent=f(r.kv);$("rC").textContent=f(r.contrib);$("rR").textContent=sg(r.rest);$("rS").textContent=f(r.score);
+  $("rBars").innerHTML=bars;$("wig").value=r.kv;
+  $("wigLbl").innerHTML=wig===null?`Knob at its saved value, <b>${f(saved.v)}</b>.`:`Knob moved to <b>${f(wig)}</b> (saved value ${f(saved.v)}). Ruby now gets <b>${pct(r.p[RUBY])}</b>${r.order[0][0]!==RUBY?`, and the model would say <b>${esc(vocab[r.order[0][0]])}</b> instead`:""}.`;
+  $("locked").textContent=wig===null?`The saved knob is still ${f(saved.v)}. Reading it changed nothing.`:"";
+}
+function renderAll(){renderTrain();renderSave();if(!saved){$("readArea").dataset.built="";wig=null}renderRead()}
+
+$("t1").onclick=()=>{if(!busy)trainSteps(1)};
+$("t10").onclick=()=>run(10,80);
+$("tAll").onclick=()=>run(TOTAL-step,30);
+$("tReset").onclick=()=>{if(!busy)reset()};
+$("saveBtn").onclick=()=>{if(!step)return;const copy=MiniTransformer(vocab.length,{seed:SEED});for(const n in model.P)model.P[n].forEach((r,i)=>r.forEach((v,j)=>copy.P[n][i][j]=v));
+  saved={m:copy,v:knob(model),step};wig=null;$("readArea").dataset.built="";renderSave();renderRead()};
+
+reset();
+$("knobTitle").textContent=`Knob #${knobNumber(model).toLocaleString("en-US")}`;
+$("fCount").textContent=model.count().toLocaleString("en-US");$("sCount").textContent=model.count().toLocaleString("en-US");
+$("fStart").textContent=f(knob(model));
+$("whereText").innerHTML=`It sits in the model's <b>output weights</b> (block 7 in <a href="transformer.html" style="color:var(--pos)">Lab 3</a>). It connects number ${K+1} of the last token's ${model.d} numbers to the score for <b>ruby</b>. In plain words: it helps decide how much the model wants to say "ruby" next.`;
+</script>
+</body>
+</html>

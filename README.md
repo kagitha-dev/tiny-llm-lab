@@ -12,13 +12,14 @@ Everything runs in the browser. No server, no install, no AI library: the traini
 # Experience: https://kagitha-dev.github.io/tiny-llm-lab/index.html
 ## Pages
 
-The three labs build on each other:
+The four labs build on each other:
 
 | Lab | What it shows |
 |---|---|
 | `index.html`: 1 · Tiny LLM Lab | What a model does. Train a model on any text and watch its weight grid change, save the weights to a file, then freeze them and predict the next token with temperature and top-k. A side panel explains every step with the real numbers. |
 | `tokens.html`: 2 · Text to numbers | How text reaches the weights. Your sentence goes through six steps: characters, clean-up, subword tokens (byte-pair encoding), IDs, a row read from the embedding weights, and the input grid. Also shows GPT-4o's real tokenizer on the same text, and a map where embeddings are learned. |
 | `transformer.html`: 3 · Transformer | How it all connects. A real one-block transformer trained in the browser. Follow a prompt through every block (embeddings, positions, attention, feed-forward, output, softmax), each tagged with the lab that covered it, and see where it beats the last-token-only model. |
+| `weights.html`: 4 · How a weight is made | The full life of one real weight, using a knob as the picture. Training turns it step by step (guess, error, blame traced backwards, turn), saving locks it, and a prompt reads it: see its exact share of the next-token score, and wiggle it by hand to see what one weight does. |
 
 Open `index.html` in a browser to start. Each page is a single self-contained HTML file; Lab 2 loads the GPT-4o tokenizer from a CDN.
 
