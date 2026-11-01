@@ -120,6 +120,13 @@ table.emb{border-collapse:collapse;width:100%;font:13px var(--mono);font-variant
 .grid-in .h{font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
 .grid-in .lbl{text-align:right;padding-right:6px;font-weight:600}
 .grid-in .c{min-width:72px;text-align:center;padding:8px;border-radius:7px;font-weight:600;font-variant-numeric:tabular-nums}
+.mult{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:14px 16px}
+.mh{margin:0 0 10px;font-size:15px}
+.mrows{display:grid;grid-template-columns:auto auto auto auto;justify-content:start;gap:6px 18px;align-items:center;font:14px var(--mono);font-variant-numeric:tabular-nums;overflow-x:auto}
+.mt{color:var(--muted)}
+.mx{color:var(--muted);text-align:center}
+.mx.on{color:var(--pos);font-weight:600}
+.mr.on,.mv.on{color:var(--pos);font-weight:600}
 .shape{font:600 15px var(--mono);color:var(--pos);text-align:center}
 
 /* real tokenizer */
@@ -308,21 +315,37 @@ function renderStage(){
     html=`<div class="flow-row" id="pieceRow">${ws.map((w,i)=>{const p=encodeWord(w);const split=p.length>1||p[0]===UNK;
       return`<div class="wgroup${split?" split":""}"><div class="pieces" data-w="${i}">${p.map(x=>`<span class="pc${x===UNK?" unk":""}">${esc(x)}</span>`).join("")}</div><small>${p[0]===UNK?"unknown":split?p.length+" pieces":"1 token"}</small></div>`}).join("")}</div>
       <div class="row" style="justify-content:center"><button id="replay">Watch the pieces merge</button><span class="small" id="mergeNote" style="margin:0"></span></div>`;
-    const nSplit=ws.filter(w=>encodeWord(w).length>1).length;
-    cap=`<p>The tokenizer learned its pieces from the training text by repeatedly gluing together the pair of symbols that appears most often (byte-pair encoding). Words it has seen become single tokens. ${nSplit?`<b>${nSplit} new word${nSplit>1?"s":""}</b> ${nSplit>1?"are":"is"} built from smaller pieces, so nothing is lost.`:`Try a word that isn't in the training text, like "rivers" or "puppies", to see it split into pieces.`}</p><p class="real">Result: <b>${toks.length} tokens</b>.</p>`;
+    const wordsNew=ws.filter(w=>encodeWord(w).length>1);
+    const letters=wordsNew.filter(w=>encodeWord(w).every(p=>[...p].length===1));
+    const partial=wordsNew.filter(w=>!letters.includes(w));
+    const realSplit=w=>{if(!REAL)return"";const ids=REAL.encode(" "+w);return ids.map(i=>`<code>${esc(REAL.decode([i]).trim())}</code>`).join(" + ")+` (${ids.length} token${ids.length>1?"s":""})`};
+    cap=`<p>The tokenizer learned its pieces from the training text by repeatedly gluing together the pair of symbols that appears most often (byte-pair encoding). Words from the training text become single tokens.</p>`+
+      (!wordsNew.length?`<p>Every word here was in the training text. Try a new word, like "rivers" or "godfather", to see what happens.</p>`:"")+
+      (partial.length?`<p>${partial.map(w=>`<b>${esc(w)}</b>`).join(", ")} ${partial.length>1?"are":"is"} new, so ${partial.length>1?"they are":"it is"} built from pieces the tokenizer already knows${partial.length===1?": "+encodeWord(partial[0]).map(p=>`<code>${esc(p)}</code>`).join(" + "):""}.</p>`:"")+
+      (letters.length?`<p>${letters.map(w=>`<b>${esc(w)}</b>`).join(", ")} ${letters.length>1?"share":"shares"} no pieces with the training text, so the tokenizer falls back to single letters. Nothing is ever unknown, but it costs more tokens.${REAL?` GPT-4o's tokenizer learned from far more text and splits <b>${esc(letters[0])}</b> as ${realSplit(letters[0])}.`:""}</p>`:"")+
+      `<p class="real">Result: <b>${toks.length} tokens</b>. A tokenizer is only as good as the text it learned from: here a few sentences, for GPT-4o a huge amount of text.</p>`;
   }else if(cur===3){
     const used=new Set(toks.map(t=>t.id));
     html=`<div class="flow-row">${toks.map(t=>`<div class="tcard"><span class="tname">${esc(t.t)}</span><span class="arrow">↓</span><span class="tid${t.id?"":" unk"}">${t.id}</span></div>`).join("")}</div>
       <div><p class="small" style="margin:0 0 6px">The vocabulary: every token the tokenizer knows, with its ID</p><div class="vocab">${vocab.map((v,i)=>`<span class="ve${used.has(i)?" on":""}"><span>${esc(v)}</span><span>${i}</span></span>`).join("")}</div></div>`;
     cap=`<p>Each token is replaced by its position in the vocabulary list. That's all an ID is: <code>${esc(toks[0].t)}</code> is ${toks[0].id} only because it is entry ${toks[0].id} in the list. The number itself carries no meaning yet.</p><p class="real">This vocabulary has ${vocab.length} entries. GPT-4o's has about 200,000.</p>`;
   }else if(cur===4){
-    html=`<div class="onehot">${toks.map(t=>`<span class="tname" style="font-size:16px;padding:4px 10px">${esc(t.t)}</span><span class="tid" style="font-size:15px;min-width:40px;padding:3px 8px">${t.id}</span><div class="oh-wrap"><div class="oh">${vocab.map((_,i)=>`<i class="${i===t.id?"one":""}" title="${i}"></i>`).join("")}</div></div>`).join("")}</div>`;
-    cap=`<p>A model picks rows by multiplying, so each ID becomes a list of <b>${vocab.length} numbers</b> (one per vocabulary entry) that are all 0 except a single 1 at the ID's position. This is called a one-hot list.</p>`;
+    const t0=toks[0],V=vocab.length,i0=t0.id;
+    const near=[i0-1,i0,i0+1].filter(j=>j>=0&&j<V);
+    const vecTxt=v=>`[${v.map(f2).join(", ")}]`;
+    html=`<p class="small" style="margin:0">Each row is ${V} switches, one for every vocabulary entry, in ID order. Only the token's own switch is on.</p>
+      <div class="onehot">${toks.map(t=>`<span class="tname" style="font-size:16px;padding:4px 10px">${esc(t.t)}</span><span class="tid" style="font-size:15px;min-width:40px;padding:3px 8px">${t.id}</span><div class="oh-wrap"><div class="oh">${vocab.map((_,i)=>`<i class="${i===t.id?"one":""}" title="switch ${i}: ${i===t.id?1:0}"></i>`).join("")}</div></div>`).join("")}</div>
+      <div class="mult"><p class="mh">How the switches pick a row for <b>${esc(t0.t)}</b></p>
+        <div class="mrows">${near.map(j=>`<span class="mr${j===i0?" on":""}">row ${j} <span class="mt">(${esc(vocab[j])})</span></span><span class="mv">${vecTxt(E[j])}</span><span class="mx${j===i0?" on":""}">× ${j===i0?1:0}</span><span class="mv${j===i0?" on":""}">= ${vecTxt(j===i0?E[j]:[0,0])}</span>`).join("")}
+        <span class="mr mt">the other ${V-near.length} rows</span><span class="mv mt">…</span><span class="mx">× 0</span><span class="mv">= [0.00, 0.00]</span>
+        <span class="mr" style="font-weight:600">add them all up</span><span></span><span></span><span class="mv on">= ${vecTxt(E[i0])}</span></div>
+        <p class="small" style="margin:8px 0 0">Every row times 0 disappears. Only the switched-on row survives: row ${i0}, the row for <b>${esc(t0.t)}</b>.</p></div>`;
+    cap=`<p>Think of a row of light switches, one for every token in the vocabulary (<b>${V}</b> here). For each token only its own switch is on (1) and all the others are off (0). This list of 0s with a single 1 is called <b>one-hot</b>.</p><p>Why? A model only multiplies and adds. Multiply each switch by its row of the embedding table and add everything up: the 0s wipe out every row except the switched-on one. So the switches pick out exactly one row.</p><p class="real">This is the maths behind the lookup. Real code skips the multiplying and fetches the row by its ID directly, which gives the same result faster.</p>`;
   }else if(cur===5){
     const on=new Set(toks.map(t=>t.id));
     html=`<div class="pick"><div class="picklist">${toks.map(t=>`<div><span class="tname" style="font-size:16px;padding:4px 10px">${esc(t.t)}</span><span class="arrow">ID ${t.id} → row ${t.id} →</span><span class="vec">${E[t.id].map(v=>`<span style="${heat(v)}">${f2(v)}</span>`).join("")}</span></div>`).join("")}</div>
       <div><p class="small" style="margin:0 0 6px">The embedding table: ${vocab.length} rows × 2 numbers, part of the model's weights</p><div class="table-box" id="tbox"><table class="emb"><thead><tr><th>ID</th><th>token</th><th>number 1</th><th>number 2</th></tr></thead><tbody>${vocab.map((v,i)=>`<tr class="${on.has(i)?"on":""}" ${on.has(i)?`data-on="1"`:""}><td>${i}</td><td>${esc(v)}</td>${E[i].map(x=>`<td class="v"><span style="${heat(x)};padding:2px 6px;border-radius:4px">${f2(x)}</span></td>`).join("")}</tr>`).join("")}</tbody></table></div></div></div>`;
-    cap=`<p>This is where your text meets the model. The embedding table is part of the <b>weights</b>, learned during training. Multiplying a one-hot list by the table gives back exactly one row, so each token simply fetches its own row of numbers.</p><p class="real">${rounds?`These numbers were learned in ${rounds} rounds of training.`:`These numbers are still random. Train them in the section below and come back.`} Real models have 768 to over 10,000 numbers per row.</p>`;
+    cap=`<p>This is where your text meets the model. The embedding table is part of the <b>weights</b>, learned during training. Each token fetches its own row: the one its switch picked in the previous step.</p><p class="real">${rounds?`These numbers were learned in ${rounds} rounds of training.`:`These numbers are still random. Train them in the section below and come back.`} Real models have 768 to over 10,000 numbers per row.</p>`;
   }else{
     html=`<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><div class="grid-in" style="grid-template-columns:auto repeat(2,auto)"><span></span><span class="h">number 1</span><span class="h">number 2</span>${toks.map(t=>`<span class="lbl">${esc(t.t)}</span>${E[t.id].map(v=>`<span class="c" style="${heat(v)}">${f2(v)}</span>`).join("")}`).join("")}</div><div class="shape">${toks.length} tokens × 2 numbers</div></div>`;
     cap=`<p>Your sentence is now a grid: one row of numbers per token. This grid is everything the model receives. The words, capitals and spaces are gone; only numbers remain.</p><p class="real">For the same sentence, GPT-2 would get a grid of ${toks.length} × 768 numbers. <a href="transformer.html">Lab 3</a> shows what the model does with it.</p>`;
@@ -356,7 +379,7 @@ function renderReal(){
   $("rTok").textContent=ids.length;$("rVocab").textContent=(REAL.vocabularySize||200019).toLocaleString("en-US");
 }
 (function loadReal(){const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/gpt-tokenizer@2.8.1/dist/o200k_base.js";s.async=true;
-  s.onload=()=>{REAL=window.GPTTokenizer_o200k_base||null;if(!REAL){fail();return}renderReal()};
+  s.onload=()=>{REAL=window.GPTTokenizer_o200k_base||null;if(!REAL){fail();return}renderReal();if(cur===2)renderStage()};
   const fail=()=>{$("realToks").innerHTML=`<span class="small" style="margin:0">The real tokenizer couldn't load. It needs an internet connection.</span>`};s.onerror=fail;document.head.appendChild(s)})();
 
 /* ---------- map ---------- */
