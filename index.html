@@ -146,7 +146,7 @@ aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:c
 
 <div class="layout" id="layout">
 <div class="wrap">
-  <nav class="pages" aria-label="Pages"><a href="index.html" aria-current="page">1 · Tiny LLM Lab</a><a href="tokens.html">2 · Tokens and embeddings</a></nav>
+  <nav class="pages" aria-label="Pages"><a href="index.html" aria-current="page">1 · Tiny LLM Lab</a><a href="tokens.html">2 · Text to numbers</a><a href="transformer.html">3 · Transformer</a></nav>
   <header>
     <div>
       <h1>Tiny LLM Lab</h1>
@@ -161,7 +161,7 @@ aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:c
   <section>
     <div class="sec-head"><span class="step">Step 1 · Train</span><h2>Learn from text</h2></div>
     <label class="hint" for="corpus">Training text</label>
-    <textarea id="corpus" rows="3" spellcheck="false" style="margin-top:6px">the cat sat on the mat . the dog sat on the rug . the cat ate fish .</textarea>
+    <textarea id="corpus" rows="3" spellcheck="false" style="margin-top:6px">My puppy name is River. River likes Ruby.</textarea>
     <div class="addrow">
       <input type="text" id="more" placeholder="Add more training text, then train again" spellcheck="false" aria-label="Add more training text">
       <button id="addBtn">Add</button>
@@ -221,7 +221,7 @@ aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:c
     <div class="sec-head"><span class="step">Step 3 · Freeze and predict</span><h2>Predict the next token</h2></div>
     <p class="hint">The saved weights are loaded and frozen. Nothing you do here changes them.</p>
     <label class="hint" for="prompt" style="display:block;margin-top:12px">Input text (context window: 1 token, so the model only uses the last one)</label>
-    <input type="text" id="prompt" value="the dog" spellcheck="false" style="margin-top:6px">
+    <input type="text" id="prompt" value="my puppy" spellcheck="false" style="margin-top:6px">
     <p class="err" id="perr"></p>
     <div class="flow">
       <div>
@@ -248,7 +248,7 @@ aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:c
     <div class="out" id="out"></div>
   </section>
 
-  <p class="foot">A simplified model for understanding. Its tokens are whole words, it looks only at the last token, and it uses one grid of weights. Large language models use subword tokens, billions of weights and the whole input to compute their scores, but follow the same cycle: random weights, training that adjusts them, a saved weights file, and frozen weights that score every possible next token. Next: <a href="tokens.html">how text becomes tokens and embeddings</a>.</p>
+  <p class="foot">A simplified model for understanding. Its tokens are whole words, it looks only at the last token, and it uses one grid of weights. Large language models use subword tokens, billions of weights and the whole input to compute their scores, but follow the same cycle: random weights, training that adjusts them, a saved weights file, and frozen weights that score every possible next token. Next: <a href="tokens.html">how text becomes numbers</a>.</p>
 </div>
 <aside id="explain" aria-label="What's happening">
   <div class="ex-head"><h2>What's happening</h2><button id="explainClose">Hide</button></div>
@@ -482,13 +482,12 @@ $("download").onclick=async()=>{if(!saved){$("saveState").style.color="var(--neg
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)};
 $("loadFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadModel(r.result,f.name);r.readAsText(f);e.target.value=""};
 function setExplain(open){$("layout").classList.toggle("open",open);$("explainToggle").setAttribute("aria-expanded",String(open));
-  try{localStorage.setItem("tll-explain",open?"1":"0")}catch(e){}}
+}
 $("explainToggle").onclick=()=>setExplain(!$("layout").classList.contains("open"));
 $("explainClose").onclick=()=>setExplain(false);
 
 syncVocab();buildMatrix();renderAll();shareText();
-(()=>{let pref=null;try{pref=localStorage.getItem("tll-explain")}catch(e){}
-  setExplain(pref?pref==="1":!!(window.matchMedia&&matchMedia("(min-width: 1061px)").matches))})();
+setExplain(false);
 log("info","A new, untrained model",`<p>The tokenizer split the training text into tokens (here, one token per word or punctuation mark) and gave each different token an ID. There are <b>${vocab.length}</b>, so the model is a grid of ${vocab.length} × ${vocab.length} = <b>${vocab.length*vocab.length}</b> weights.</p><p>Each row is a token the model sees, each column a token that could come next. Right now every weight is a random number, so the model knows nothing and its guesses would be random.</p>`);
 </script>
 </body>

@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Tokens and Embeddings</title>
+<title>Text to Numbers</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one sentence travels down the page; each station changes it into the next form (words → token IDs → embedding rows), then two stations explain where the rows and the pieces come from */
+/* Layout: a conveyor. One sentence sits on a stage; a rail of seven stations changes its form one step at a time (characters → words → tokens → IDs → one-hot → weight rows → input grid) */
 :root{
   --bg:#f2f4f7; --panel:#ffffff; --ink:#152033; --muted:#5a6578; --line:#d9dfe8; --cell:#edf0f5;
   --pos:#1d63c9; --neg:#d0532a; --good:#18805a; --warn:#a86a00; --on-strong:#ffffff;
@@ -25,18 +25,18 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;margin:0;
   padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 nav.pages{display:flex;gap:6px;flex-wrap:wrap;font:600 14px var(--body)}
 nav.pages a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
 nav.pages a:hover{color:var(--ink);border-color:var(--muted)}
 nav.pages a[aria-current="page"]{color:var(--on-strong);background:var(--ink);border-color:var(--ink)}
 h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:8px 0 0;max-width:62ch}
+.sub{color:var(--muted);margin:8px 0 0;max-width:66ch}
 section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;min-width:0}
 .sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 .step{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pos);font-weight:600}
 h2{font-family:var(--display);font-weight:700;font-size:26px;margin:0;text-wrap:balance}
-.lead{margin:0 0 16px;max-width:66ch;color:var(--muted)}
+.lead{margin:0 0 16px;max-width:68ch;color:var(--muted)}
 .lead b{color:var(--ink);font-weight:600}
 textarea,input[type=text],input[type=number]{width:100%;font:500 17px/1.5 var(--mono);color:var(--ink);background:var(--bg);
   border:1px solid var(--line);border-radius:10px;padding:10px 14px}
@@ -48,37 +48,95 @@ button{font:600 15px var(--body);color:var(--ink);background:var(--panel);border
   border-radius:10px;padding:10px 16px;cursor:pointer;white-space:nowrap}
 button:hover{border-color:var(--muted)}
 button.primary{background:var(--pos);border-color:var(--pos);color:var(--on-strong)}
+button:disabled{opacity:.45;cursor:default}
 .small{font-size:14px;color:var(--muted);margin:8px 0 0}
 .small b{color:var(--ink)}
 code{font:600 13px var(--mono);background:var(--cell);border-radius:4px;padding:1px 5px}
 
-/* the journey table: one column per token, three stations stacked */
-.trace-wrap{overflow-x:auto;margin-top:18px;padding-bottom:4px}
-table.trace{border-collapse:separate;border-spacing:10px 0;margin:0 -10px}
-.trace th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;white-space:nowrap;padding-right:6px;vertical-align:middle}
-.trace td{text-align:center;vertical-align:middle;min-width:96px}
-.trace tr.arrow td,.trace tr.arrow th{font:12px var(--mono);color:var(--muted);padding:6px 0;text-transform:none;letter-spacing:0}
-.word{display:inline-block;font:600 22px var(--mono);padding:10px 14px;border-radius:10px;background:var(--cell)}
-.word.unk{color:var(--neg);background:color-mix(in oklab,var(--neg) 12%,var(--panel))}
-.id{display:inline-flex;align-items:center;justify-content:center;min-width:52px;font:600 22px var(--mono);padding:8px 12px;border-radius:999px;border:2px solid var(--pos);color:var(--pos)}
-.id.unk{border-color:var(--neg);color:var(--neg)}
-.vec{display:inline-flex;flex-direction:column;gap:5px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:600 15px var(--mono);font-variant-numeric:tabular-nums;min-width:110px}
-.vec div{display:grid;grid-template-columns:52px 46px;align-items:center;gap:8px}
-.vec .num{text-align:right}
-.track{height:10px;background:var(--cell);border-radius:5px;position:relative;overflow:hidden}
-.track i{position:absolute;top:0;bottom:0;background:var(--pos);border-radius:5px}
-.track i.n{background:var(--neg)}
-.track::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--muted);opacity:.5}
-.callout{margin-top:16px;padding:12px 14px;border-radius:10px;background:color-mix(in oklab,var(--neg) 10%,var(--panel));font-size:14.5px}
-.callout a{color:var(--pos)}
+/* the rail */
+.rail{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:18px 0 0;padding:0;list-style:none;counter-reset:st}
+.rail button{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 10px;border-radius:10px;white-space:normal;text-align:left;font-size:13px;line-height:1.25;color:var(--muted);background:var(--bg)}
+.rail button b{font:600 12px var(--mono);color:var(--muted)}
+.rail button.done{color:var(--ink);background:var(--panel)}
+.rail button.done b{color:var(--pos)}
+.rail button.cur{background:var(--pos);border-color:var(--pos);color:var(--on-strong)}
+.rail button.cur b{color:var(--on-strong)}
+@media (max-width:760px){.rail{grid-template-columns:repeat(7,minmax(38px,1fr))}.rail button span{display:none}.rail button{align-items:center}}
+.stagebox{margin-top:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg);min-height:260px;padding:24px 20px;display:flex;flex-direction:column;justify-content:center;gap:16px;overflow:hidden}
+.stage{overflow-x:auto;padding-bottom:4px;animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.cap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 20px;align-items:start;margin-top:14px}
+@media (max-width:760px){.cap{grid-template-columns:minmax(0,1fr)}}
+.cap h3{font:700 21px var(--display);margin:0}
+.cap p{margin:6px 0 0;max-width:72ch}
+.cap .real{color:var(--muted);font-size:14.5px}
+.flow-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:center}
 
-/* vocabulary strip */
-.vocab{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.ve{display:inline-flex;font:13px var(--mono);border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.ve span{padding:3px 7px}
+/* stage visuals */
+.chars{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+.ch{width:30px;height:40px;display:flex;align-items:center;justify-content:center;font:600 20px var(--mono);background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.ch.sp{color:var(--muted);font-size:13px}
+.wd{font:600 22px var(--mono);padding:8px 14px;border-radius:10px;background:var(--panel);border:1px solid var(--line);position:relative}
+.wd.chg{border-color:var(--warn)}
+.wd .was{position:absolute;top:-18px;left:0;right:0;text-align:center;font:12px var(--mono);color:var(--warn)}
+.wgroup{display:flex;flex-direction:column;align-items:center;gap:6px}
+.wgroup small{font:12px var(--mono);color:var(--muted)}
+.wgroup.split small{color:var(--warn)}
+.pieces{display:flex;gap:3px}
+.pc{font:600 22px var(--mono);padding:8px 10px;border-radius:9px;background:var(--panel);border:1px solid var(--line);transition:background .3s}
+.pc.unk{color:var(--neg)}
+.pc.fresh{background:color-mix(in oklab,var(--good) 22%,var(--panel))}
+.tcard{display:flex;flex-direction:column;align-items:center;gap:8px}
+.tname{font:600 20px var(--mono);padding:6px 12px;border-radius:9px;background:var(--panel);border:1px solid var(--line)}
+.tid{display:inline-flex;align-items:center;justify-content:center;min-width:48px;font:600 20px var(--mono);padding:6px 12px;border-radius:999px;border:2px solid var(--pos);color:var(--pos);background:var(--panel)}
+.tid.unk{border-color:var(--neg);color:var(--neg)}
+.arrow{font:13px var(--mono);color:var(--muted)}
+.vocab{display:flex;flex-wrap:wrap;gap:4px;max-height:110px;overflow:auto}
+.ve{display:inline-flex;font:12px var(--mono);border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--panel)}
+.ve span{padding:2px 6px}
 .ve span+span{background:var(--cell);color:var(--muted)}
 .ve.on{border-color:var(--pos)}
 .ve.on span:first-child{color:var(--pos);font-weight:600}
+.onehot{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px 12px;align-items:center;font:14px var(--mono)}
+.oh{display:flex;gap:2px;flex-wrap:nowrap}
+.oh i{width:9px;height:22px;border-radius:2px;background:var(--line);flex:none}
+.oh i.one{background:var(--pos);height:22px}
+.oh-wrap{overflow-x:auto;padding:4px 0}
+.ohidx{font:12px var(--mono);color:var(--muted)}
+.pick{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:760px){.pick{grid-template-columns:minmax(0,1fr)}}
+.picklist{display:flex;flex-direction:column;gap:8px;font:15px var(--mono)}
+.picklist div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vec{display:inline-flex;gap:4px}
+.vec span{min-width:62px;text-align:center;padding:5px 8px;border-radius:7px;font:600 15px var(--mono);font-variant-numeric:tabular-nums}
+.table-box{border:1px solid var(--line);border-radius:10px;background:var(--panel);max-height:300px;overflow:auto}
+table.emb{border-collapse:collapse;width:100%;font:13px var(--mono);font-variant-numeric:tabular-nums}
+.emb th{position:sticky;top:0;background:var(--panel);font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)}
+.emb td{padding:3px 8px;border-bottom:1px solid var(--line)}
+.emb td.v{text-align:center;border-radius:4px}
+.emb tr.on td{background:color-mix(in oklab,var(--warn) 16%,var(--panel));font-weight:600}
+.emb tr.on td.v{background:none}
+.grid-in{display:inline-grid;gap:4px;font:15px var(--mono);align-items:center}
+.grid-in .h{font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
+.grid-in .lbl{text-align:right;padding-right:6px;font-weight:600}
+.grid-in .c{min-width:72px;text-align:center;padding:8px;border-radius:7px;font-weight:600;font-variant-numeric:tabular-nums}
+.shape{font:600 15px var(--mono);color:var(--pos);text-align:center}
+
+/* real tokenizer */
+.realbox{display:flex;flex-direction:column;gap:12px}
+.rtoks{display:flex;flex-wrap:wrap;gap:6px}
+.rt{display:inline-flex;flex-direction:column;align-items:center;font:600 18px var(--mono);padding:6px 10px;border-radius:9px;border:1px solid var(--line);white-space:pre}
+.rt small{font:12px var(--mono);color:var(--muted)}
+.rt:nth-child(5n+1){background:color-mix(in oklab,var(--pos) 10%,var(--panel))}
+.rt:nth-child(5n+2){background:color-mix(in oklab,var(--good) 12%,var(--panel))}
+.rt:nth-child(5n+3){background:color-mix(in oklab,var(--warn) 12%,var(--panel))}
+.rt:nth-child(5n+4){background:color-mix(in oklab,var(--neg) 10%,var(--panel))}
+.rt:nth-child(5n+5){background:var(--cell)}
+.rt .sp{color:var(--muted);font-weight:400}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--cell);border-radius:10px;padding:10px 12px}
+.stat span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.stat strong{font:600 22px var(--mono);font-variant-numeric:tabular-nums}
 
 /* map */
 .split{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr);gap:20px;margin-top:4px}
@@ -93,66 +151,65 @@ table.trace{border-collapse:separate;border-spacing:10px 0;margin:0 -10px}
 .plot circle.sel{stroke:var(--ink);stroke-width:3}
 .plot line{stroke:var(--line)}
 .side{display:flex;flex-direction:column;gap:12px;min-width:0}
-.stat{background:var(--cell);border-radius:10px;padding:10px 12px}
-.stat span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
-.stat strong{font:600 22px var(--mono);font-variant-numeric:tabular-nums}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .note{background:var(--cell);border-radius:10px;padding:12px 14px;font-size:14.5px}
 .note p{margin:0}.note p+p{margin-top:6px}
 .near{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-direction:column;gap:4px;font:14px var(--mono)}
 .near li{display:flex;justify-content:space-between;background:var(--panel);border-radius:6px;padding:4px 8px}
-
-/* new word builder */
-.vs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;margin-top:16px}
-.box{border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
-.box h3{font:600 16px var(--body);margin:0}
-.pieces{display:flex;flex-wrap:wrap;gap:6px;min-height:52px;align-items:center}
-.pc{display:inline-flex;flex-direction:column;align-items:center;gap:2px;font:600 22px var(--mono);padding:6px 12px;border-radius:10px;background:var(--cell);transition:background .3s}
-.pc small{font:12px var(--mono);color:var(--muted)}
-.pc.fresh{background:color-mix(in oklab,var(--good) 22%,var(--panel))}
-.pc.unk{color:var(--neg);background:color-mix(in oklab,var(--neg) 12%,var(--panel))}
-.mstep{font:14px var(--mono);color:var(--muted);min-height:1.5em}
-.mstep b{color:var(--good)}
-.verdict{font-size:14.5px;margin:0}
-.verdict.bad{color:var(--neg)} .verdict.good{color:var(--good)}
-
-/* shared training text */
 details.train{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 22px}
 details.train summary{cursor:pointer;font-weight:600}
 details.train summary span{font-weight:400;color:var(--muted);font-size:14px}
 .foot{color:var(--muted);font-size:14px;max-width:80ch;margin:0}
-.foot a{color:var(--pos)}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.foot a,.cap a{color:var(--pos)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 
 <div class="wrap">
-  <nav class="pages" aria-label="Pages"><a href="index.html">1 · Tiny LLM Lab</a><a href="tokens.html" aria-current="page">2 · Tokens and embeddings</a></nav>
+  <nav class="pages" aria-label="Pages"><a href="index.html">1 · Tiny LLM Lab</a><a href="tokens.html" aria-current="page">2 · Text to numbers</a><a href="transformer.html">3 · Transformer</a></nav>
   <header>
-    <h1>Tokens and embeddings</h1>
-    <p class="sub">A model can only compute with numbers. Follow one sentence as it turns into tokens, then IDs, then rows of learned numbers.</p>
+    <h1>Text to numbers</h1>
+    <p class="sub">A model can only multiply and add numbers. Follow your sentence through seven steps until it becomes the grid of numbers a model actually receives, and see where it first meets the model's weights.</p>
   </header>
 
   <section>
-    <div class="sec-head"><span class="step">Text → tokens → IDs → embeddings</span><h2>Follow a sentence into the model</h2></div>
-    <p class="lead">Type a sentence. The <b>tokenizer</b> cuts it into tokens and looks up each token's ID in its vocabulary. The model then uses each ID to fetch one row from its <b>embedding table</b>.</p>
-    <label class="small" for="sentence" style="display:block;margin:0 0 6px">Sentence</label>
+    <label class="small" for="sentence" style="display:block;margin:0 0 6px">Your sentence</label>
     <input type="text" id="sentence" spellcheck="false">
-    <div class="trace-wrap"><table class="trace" id="trace"></table></div>
-    <div class="callout" id="unkNote" hidden></div>
-    <p class="small" id="traceNote"></p>
-    <p class="small" style="margin-top:14px">Vocabulary: every token the tokenizer knows, with its ID</p>
-    <div class="vocab" id="vocab"></div>
+    <ol class="rail" id="rail" aria-label="Steps"></ol>
+    <div class="stagebox"><div class="stage" id="stage"></div></div>
+    <div class="cap">
+      <div id="cap"></div>
+      <div class="row">
+        <button id="prev" aria-label="Previous step">← Back</button>
+        <button class="primary" id="next">Next step →</button>
+        <button id="play">Play all</button>
+      </div>
+    </div>
   </section>
 
   <section>
-    <div class="sec-head"><span class="step">Where the rows come from</span><h2>Embeddings are learned, not written</h2></div>
-    <p class="lead">Every row starts as random numbers. Training uses the same task as the Tiny LLM Lab, predicting the next token, and nudges these numbers each time. Each row has 2 numbers here, so every token can be drawn as a point on a map. Real models use thousands of numbers per row.</p>
+    <div class="sec-head"><span class="step">The real thing</span><h2>The same sentence in GPT-4o's tokenizer</h2></div>
+    <p class="lead">This is the actual tokenizer used by GPT-4o, running in your browser. It learned its pieces from a huge amount of text, so common words are single tokens and rare words split into pieces. Try another language too.</p>
+    <input type="text" id="realInput" spellcheck="false" aria-label="Text for the real tokenizer">
+    <div class="realbox" style="margin-top:14px">
+      <div class="rtoks" id="realToks"><span class="small" style="margin:0">Loading the real tokenizer…</span></div>
+      <div class="stats">
+        <div class="stat"><span>Characters</span><strong id="rChars">–</strong></div>
+        <div class="stat"><span>Tokens</span><strong id="rTok">–</strong></div>
+        <div class="stat"><span>Vocabulary</span><strong id="rVocab">–</strong></div>
+      </div>
+      <p class="small" style="margin:0">Differences from the steps above: it keeps capitals ("River" and "river" are different tokens), and it stores the space in front of a word inside the token, shown as <span style="color:var(--muted)">·</span>.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="step">Where the rows come from</span><h2>The embedding weights are learned</h2></div>
+    <p class="lead">Every row of the embedding table starts as random numbers. Training uses the same task as the Tiny LLM Lab, predicting the next token, and nudges these numbers each time. Each row has 2 numbers, so each token can be drawn as a point: its two numbers are its position on this map.</p>
     <div class="row" style="margin-bottom:14px">
       <button class="primary" id="trainBtn">Train embeddings</button>
       <label for="rounds">rounds</label><input type="number" id="rounds" value="300" min="1" max="3000" step="1">
       <button id="resetBtn">Reset to random</button>
+      <button id="bigBtn">Use a bigger example text</button>
     </div>
     <div class="split">
       <div class="plot"><svg id="plot" viewBox="0 0 640 440" role="img" aria-label="Map of token embeddings"></svg></div>
@@ -167,199 +224,195 @@ details.train summary span{font-weight:400;color:var(--muted);font-size:14px}
     </div>
   </section>
 
-  <section>
-    <div class="sec-head"><span class="step">What about new words?</span><h2>Why real models use pieces of words</h2></div>
-    <p class="lead">A word tokenizer only knows whole words from its training text. Real LLMs learn <b>subword pieces</b> instead (byte-pair encoding, BPE): start from single letters, then repeatedly glue together the pair that appears most often in the training text. Any new word can be built from pieces.</p>
-    <label class="small" for="newWord" style="display:block;margin:0 0 6px">A word that is not in the training text</label>
-    <input type="text" id="newWord" spellcheck="false" style="max-width:360px">
-    <div class="vs">
-      <div class="box">
-        <h3>Word tokenizer</h3>
-        <div class="pieces" id="wordOut"></div>
-        <p class="verdict bad" id="wordVerdict"></p>
-      </div>
-      <div class="box">
-        <h3>Subword tokenizer</h3>
-        <div class="pieces" id="bpeOut"></div>
-        <div class="mstep" id="mstep"></div>
-        <div class="row">
-          <button id="mStart">Letters</button>
-          <button class="primary" id="mNext">Apply next merge</button>
-          <button id="mAll">All merges</button>
-        </div>
-        <p class="verdict good" id="bpeVerdict"></p>
-      </div>
-    </div>
-  </section>
-
   <details class="train" id="trainBox">
     <summary>Training text <span id="srcNote"></span></summary>
-    <p class="small">The tokenizers build their vocabulary from this text, and the embeddings are trained on it.</p>
+    <p class="small">The tokenizer learns its pieces from this text, and the embedding weights are trained on it.</p>
     <textarea id="corpus" rows="4" spellcheck="false" style="margin-top:8px"></textarea>
-    <div class="row" style="margin-top:8px"><button id="relearn">Use this text</button><span class="small" style="margin:0">Rebuilds the vocabulary and resets the embeddings to random.</span></div>
+    <div class="row" style="margin-top:8px"><button id="relearn">Use this text</button><span class="small" style="margin:0">Relearns the pieces and resets the embeddings to random.</span></div>
   </details>
 
-  <p class="foot">A simplified model for understanding. Real tokenizers learn 50,000 to 200,000 pieces from huge amounts of text, and their embedding rows have thousands of numbers. In a real LLM the fetched rows then pass through many layers, where each token's numbers are mixed with the others, before the next-token scores come out. Back to <a href="index.html">the Tiny LLM Lab</a>.</p>
+  <p class="foot">A simplified model for understanding. Real tokenizers learn 50,000 to 200,000 pieces and work on bytes, so they can handle any language. Real embedding rows have hundreds to thousands of numbers instead of 2. Next: <a href="transformer.html">what the model does with this grid of numbers</a>.</p>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const words=t=>t.toLowerCase().replace(/([.,!?;:])/g," $1 ").split(/\s+/).filter(Boolean);
+const normalize=t=>t.toLowerCase().replace(/([.,!?;:])/g," $1 ").split(/\s+/).filter(Boolean);
 const UNK="[UNK]";
-const DEFAULT_TEXT="the cat eats fish . the dog eats meat . the cat drinks milk . the dog drinks water . a cat sleeps . a dog sleeps . the boy eats rice . the girl eats bread . the boy drinks juice . the girl drinks milk . a boy runs . a girl runs . the cat runs . the dog sleeps . a girl sleeps . the boy eats bread . the cat eats meat . the dog drinks milk .";
+const LAB_DEFAULT="My puppy name is River. River likes Ruby.";
+const BIG="The cat eats fish. The dog eats meat. The cat drinks milk. The dog drinks water. A cat sleeps. A dog sleeps. The boy eats rice. The girl eats bread. The boy drinks juice. The girl drinks milk. A boy runs. A girl runs. The cat runs. The dog sleeps. A girl sleeps. The boy eats bread. The cat eats meat. The dog drinks milk.";
 let seed=11;const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let q=Math.imul(seed^seed>>>15,1|seed);q=q+Math.imul(q^q>>>7,61|q)^q;return((q^q>>>14)>>>0)/4294967296};
-let vocab=[],E=[],O=[],B=[],rounds=0,lossHist=[],selected=null,running=false,merges=[],pieceVocab=[],mState=0,mStates=[];
+let base=[],merges=[],vocab=[],E=[],O=[],B=[],rounds=0,lossHist=[],selected=null,running=false,cur=0,playTimer=null,mergeTimer=null;
 
-/* ---------- training text, shared with the Tiny LLM Lab when it has one ---------- */
-function startText(){let t=null;try{t=localStorage.getItem("tll-corpus")}catch(e){}
-  const ok=t&&words(t).length>=6;$("srcNote").textContent=ok?"· from the Tiny LLM Lab":"· built-in sample";return ok?t.trim():DEFAULT_TEXT}
-
-/* ---------- word vocabulary + embedding model ---------- */
-function buildModel(){
-  seed=11;vocab=[UNK];words($("corpus").value).forEach(w=>{if(!vocab.includes(w))vocab.push(w)});
-  E=vocab.map(()=>[rnd()-.5,rnd()-.5]);O=[0,1].map(()=>vocab.map(()=>rnd()-.5));B=vocab.map(()=>0);
-  rounds=0;lossHist=[];selected=null;learnPieces();
+/* ---------- tokenizer: learn pieces (byte-pair encoding) from the training text ---------- */
+function applyMerge(s,a,b){const o=[];for(let i=0;i<s.length;i++){if(i<s.length-1&&s[i]===a&&s[i+1]===b){o.push(a+b);i++}else o.push(s[i])}return o}
+function learnTokenizer(){
+  const ws=normalize($("corpus").value);const freq={};ws.forEach(w=>freq[w]=(freq[w]||0)+1);
+  const seqs=Object.entries(freq).map(([w,n])=>({s:[...w],n}));
+  base=[...new Set([..."abcdefghijklmnopqrstuvwxyz.,!?;:",...ws.join("")])];merges=[];
+  for(let it=0;it<300;it++){
+    const cnt=new Map();seqs.forEach(({s,n})=>{for(let i=0;i<s.length-1;i++){const k=s[i]+"\u0000"+s[i+1];cnt.set(k,(cnt.get(k)||0)+n)}});
+    let best=null,bn=0;cnt.forEach((v,k)=>{if(v>bn){bn=v;best=k}});if(!best)break;
+    const[a,b]=best.split("\u0000");merges.push([a,b]);seqs.forEach(q=>q.s=applyMerge(q.s,a,b));
+  }
+  vocab=[UNK,...base,...merges.map(([a,b])=>a+b)];
 }
-function pairs(){const t=words($("corpus").value);const p=[];for(let i=0;i<t.length-1;i++)p.push([vocab.indexOf(t[i]),vocab.indexOf(t[i+1])]);return p}
+function pieceStates(word){let s=[...word];const st=[s];merges.forEach(([a,b])=>{s=applyMerge(s,a,b);st.push(s)});return st}
+function encodeWord(w){return pieceStates(w).pop().map(p=>vocab.includes(p)?p:UNK)}
+function tokenize(text){const out=[];normalize(text).forEach((w,wi)=>encodeWord(w).forEach(p=>out.push({t:p,id:Math.max(0,vocab.indexOf(p)),w:wi})));return out}
+
+/* ---------- embedding weights: 2 numbers per token, trained on next-token prediction ---------- */
+function initEmb(){seed=11;E=vocab.map(()=>[rnd()-.5,rnd()-.5]);O=[0,1].map(()=>vocab.map(()=>rnd()-.5));B=vocab.map(()=>0);rounds=0;lossHist=[];selected=null}
+function trainIds(){return tokenize($("corpus").value).map(x=>x.id)}
 function trainRound(lr=0.3){
-  let L=0;const ps=pairs();const n=vocab.length;
-  for(const[x,y]of ps){const h=E[x];const sc=[];for(let j=0;j<n;j++)sc.push(h[0]*O[0][j]+h[1]*O[1][j]+B[j]);
+  const ids=trainIds();const n=vocab.length;let L=0;
+  for(let i=0;i<ids.length-1;i++){const x=ids[i],y=ids[i+1];const h=E[x];const sc=[];for(let j=0;j<n;j++)sc.push(h[0]*O[0][j]+h[1]*O[1][j]+B[j]);
     const m=Math.max(...sc);const e=sc.map(v=>Math.exp(v-m));const z=e.reduce((a,c)=>a+c,0);const p=e.map(v=>v/z);L-=Math.log(p[y]);
     const ds=p.map((v,j)=>v-(j===y?1:0));const dh=[0,1].map(d=>ds.reduce((a,v,j)=>a+v*O[d][j],0));
-    for(let d=0;d<2;d++)for(let j=0;j<n;j++)O[d][j]-=lr*h[d]*ds[j];
-    for(let j=0;j<n;j++)B[j]-=lr*ds[j];for(let d=0;d<2;d++)h[d]-=lr*dh[d];}
-  rounds++;const l=L/Math.max(ps.length,1);lossHist.push(l);return l;
+    for(let d=0;d<2;d++)for(let j=0;j<n;j++)O[d][j]-=lr*h[d]*ds[j];for(let j=0;j<n;j++)B[j]-=lr*ds[j];for(let d=0;d<2;d++)h[d]-=lr*dh[d]}
+  rounds++;const l=L/Math.max(ids.length-1,1);lossHist.push(l);return l;
 }
+const maxAbs=()=>Math.max(1,...E.flat().map(Math.abs));
+function heat(v){const p=Math.round(Math.min(Math.abs(v)/maxAbs(),1)*70);const col=v>=0?"var(--pos)":"var(--neg)";
+  return `background:color-mix(in oklab, ${col} ${p}%, var(--panel));color:${p>45?"var(--on-strong)":"var(--ink)"}`}
+const f2=v=>{const s=v.toFixed(2);return s==="-0.00"?"0.00":s};
 
-/* ---------- BPE pieces learned from the same text ---------- */
-function learnPieces(){
-  const freq={};words($("corpus").value).filter(w=>/[a-z]/.test(w)).forEach(w=>freq[w]=(freq[w]||0)+1);
-  let seqs=Object.entries(freq).map(([w,n])=>({s:[...w],n}));
-  const letters=[...new Set("abcdefghijklmnopqrstuvwxyz".split("").concat(...seqs.map(q=>q.s)))];
-  merges=[];
-  for(let it=0;it<200;it++){
-    const cnt=new Map();
-    seqs.forEach(({s,n})=>{for(let i=0;i<s.length-1;i++){const k=s[i]+"\u0000"+s[i+1];cnt.set(k,(cnt.get(k)||0)+n)}});
-    let best=null,bn=0;cnt.forEach((v,k)=>{if(v>bn){bn=v;best=k}});if(!best)break;
-    const[a,b]=best.split("\u0000");merges.push([a,b]);
-    seqs.forEach(q=>q.s=applyMerge(q.s,a,b));
+/* ---------- the seven steps ---------- */
+const STEPS=[
+ {k:"Characters",t:"It starts as characters"},
+ {k:"Clean up",t:"Clean up and split into words"},
+ {k:"Tokens",t:"Split words into tokens"},
+ {k:"IDs",t:"Look up each token's ID"},
+ {k:"One-hot",t:"Turn each ID into a one-hot list"},
+ {k:"Weights",t:"Use it to pick a row of weights"},
+ {k:"Input grid",t:"The model's input: a grid of numbers"}];
+function renderRail(){
+  $("rail").innerHTML=STEPS.map((s,i)=>`<li><button data-i="${i}" class="${i===cur?"cur":i<cur?"done":""}" aria-current="${i===cur?"step":"false"}"><b>${i+1}</b><span>${s.k}</span></button></li>`).join("");
+  $("rail").querySelectorAll("button").forEach(b=>b.onclick=()=>{stopPlay();go(+b.dataset.i)});
+  $("prev").disabled=cur===0;$("next").disabled=cur===STEPS.length-1;
+}
+function go(i){cur=Math.max(0,Math.min(STEPS.length-1,i));clearInterval(mergeTimer);renderRail();renderStage()}
+function renderStage(){
+  const text=$("sentence").value;const ws=normalize(text);const toks=tokenize(text);
+  const st=$("stage");st.style.animation="none";void st.offsetWidth;st.style.animation="";
+  let html="",cap="";
+  if(!text.trim()){st.innerHTML=`<p class="small" style="text-align:center">Type a sentence above.</p>`;$("cap").innerHTML=`<h3>${STEPS[cur].t}</h3>`;return}
+  if(cur===0){
+    html=`<div class="chars">${[...text].map(c=>`<span class="ch${c===" "?" sp":""}">${c===" "?"space":esc(c)}</span>`).join("")}</div>`;
+    cap=`<p>To a computer your sentence is a row of <b>${[...text].length} characters</b>. Nothing here can be multiplied or added, so before a model can use it, the tokenizer has to turn it into numbers.</p>`;
+  }else if(cur===1){
+    const orig=text.replace(/([.,!?;:])/g," $1 ").split(/\s+/).filter(Boolean);
+    html=`<div class="flow-row" style="padding-top:18px">${ws.map((w,i)=>{const o=orig[i]||w;return`<span class="wd${o!==w?" chg":""}">${o!==w?`<span class="was">${esc(o)}</span>`:""}${esc(w)}</span>`}).join("")}</div>`;
+    cap=`<p>This tokenizer makes everything lowercase and treats punctuation as a word of its own, then splits on spaces: <b>${ws.length} words</b>.</p><p class="real">Real GPT tokenizers keep capitals, so "River" and "river" become different tokens.</p>`;
+  }else if(cur===2){
+    html=`<div class="flow-row" id="pieceRow">${ws.map((w,i)=>{const p=encodeWord(w);const split=p.length>1||p[0]===UNK;
+      return`<div class="wgroup${split?" split":""}"><div class="pieces" data-w="${i}">${p.map(x=>`<span class="pc${x===UNK?" unk":""}">${esc(x)}</span>`).join("")}</div><small>${p[0]===UNK?"unknown":split?p.length+" pieces":"1 token"}</small></div>`}).join("")}</div>
+      <div class="row" style="justify-content:center"><button id="replay">Watch the pieces merge</button><span class="small" id="mergeNote" style="margin:0"></span></div>`;
+    const nSplit=ws.filter(w=>encodeWord(w).length>1).length;
+    cap=`<p>The tokenizer learned its pieces from the training text by repeatedly gluing together the pair of symbols that appears most often (byte-pair encoding). Words it has seen become single tokens. ${nSplit?`<b>${nSplit} new word${nSplit>1?"s":""}</b> ${nSplit>1?"are":"is"} built from smaller pieces, so nothing is lost.`:`Try a word that isn't in the training text, like "rivers" or "puppies", to see it split into pieces.`}</p><p class="real">Result: <b>${toks.length} tokens</b>.</p>`;
+  }else if(cur===3){
+    const used=new Set(toks.map(t=>t.id));
+    html=`<div class="flow-row">${toks.map(t=>`<div class="tcard"><span class="tname">${esc(t.t)}</span><span class="arrow">↓</span><span class="tid${t.id?"":" unk"}">${t.id}</span></div>`).join("")}</div>
+      <div><p class="small" style="margin:0 0 6px">The vocabulary: every token the tokenizer knows, with its ID</p><div class="vocab">${vocab.map((v,i)=>`<span class="ve${used.has(i)?" on":""}"><span>${esc(v)}</span><span>${i}</span></span>`).join("")}</div></div>`;
+    cap=`<p>Each token is replaced by its position in the vocabulary list. That's all an ID is: <code>${esc(toks[0].t)}</code> is ${toks[0].id} only because it is entry ${toks[0].id} in the list. The number itself carries no meaning yet.</p><p class="real">This vocabulary has ${vocab.length} entries. GPT-4o's has about 200,000.</p>`;
+  }else if(cur===4){
+    html=`<div class="onehot">${toks.map(t=>`<span class="tname" style="font-size:16px;padding:4px 10px">${esc(t.t)}</span><span class="tid" style="font-size:15px;min-width:40px;padding:3px 8px">${t.id}</span><div class="oh-wrap"><div class="oh">${vocab.map((_,i)=>`<i class="${i===t.id?"one":""}" title="${i}"></i>`).join("")}</div></div>`).join("")}</div>`;
+    cap=`<p>A model picks rows by multiplying, so each ID becomes a list of <b>${vocab.length} numbers</b> (one per vocabulary entry) that are all 0 except a single 1 at the ID's position. This is called a one-hot list.</p>`;
+  }else if(cur===5){
+    const on=new Set(toks.map(t=>t.id));
+    html=`<div class="pick"><div class="picklist">${toks.map(t=>`<div><span class="tname" style="font-size:16px;padding:4px 10px">${esc(t.t)}</span><span class="arrow">ID ${t.id} → row ${t.id} →</span><span class="vec">${E[t.id].map(v=>`<span style="${heat(v)}">${f2(v)}</span>`).join("")}</span></div>`).join("")}</div>
+      <div><p class="small" style="margin:0 0 6px">The embedding table: ${vocab.length} rows × 2 numbers, part of the model's weights</p><div class="table-box" id="tbox"><table class="emb"><thead><tr><th>ID</th><th>token</th><th>number 1</th><th>number 2</th></tr></thead><tbody>${vocab.map((v,i)=>`<tr class="${on.has(i)?"on":""}" ${on.has(i)?`data-on="1"`:""}><td>${i}</td><td>${esc(v)}</td>${E[i].map(x=>`<td class="v"><span style="${heat(x)};padding:2px 6px;border-radius:4px">${f2(x)}</span></td>`).join("")}</tr>`).join("")}</tbody></table></div></div></div>`;
+    cap=`<p>This is where your text meets the model. The embedding table is part of the <b>weights</b>, learned during training. Multiplying a one-hot list by the table gives back exactly one row, so each token simply fetches its own row of numbers.</p><p class="real">${rounds?`These numbers were learned in ${rounds} rounds of training.`:`These numbers are still random. Train them in the section below and come back.`} Real models have 768 to over 10,000 numbers per row.</p>`;
+  }else{
+    html=`<div style="display:flex;flex-direction:column;align-items:center;gap:10px"><div class="grid-in" style="grid-template-columns:auto repeat(2,auto)"><span></span><span class="h">number 1</span><span class="h">number 2</span>${toks.map(t=>`<span class="lbl">${esc(t.t)}</span>${E[t.id].map(v=>`<span class="c" style="${heat(v)}">${f2(v)}</span>`).join("")}`).join("")}</div><div class="shape">${toks.length} tokens × 2 numbers</div></div>`;
+    cap=`<p>Your sentence is now a grid: one row of numbers per token. This grid is everything the model receives. The words, capitals and spaces are gone; only numbers remain.</p><p class="real">For the same sentence, GPT-2 would get a grid of ${toks.length} × 768 numbers. <a href="transformer.html">Lab 3</a> shows what the model does with it.</p>`;
   }
-  pieceVocab=[UNK,...letters,...merges.map(([a,b])=>a+b)];
+  st.innerHTML=html;$("cap").innerHTML=`<h3>${cur+1}. ${STEPS[cur].t}</h3>${cap}`;
+  if(cur===2)$("replay").onclick=replayMerges;
+  if(cur===5){const r=$("tbox").querySelector("[data-on]");if(r)$("tbox").scrollTop=Math.max(0,r.offsetTop-40)}
 }
-function applyMerge(s,a,b){const o=[];for(let i=0;i<s.length;i++){if(i<s.length-1&&s[i]===a&&s[i+1]===b){o.push(a+b);i++}else o.push(s[i])}return o}
-function buildStates(word){
-  let s=[...word];const st=[{s,merge:null}];
-  merges.forEach(([a,b])=>{const n=applyMerge(s,a,b);if(n.length!==s.length){st.push({s:n,merge:[a,b]});s=n}});
-  return st;
+function replayMerges(){
+  clearInterval(mergeTimer);const ws=normalize($("sentence").value);const states=ws.map(pieceStates);
+  const changes=[0];for(let m=1;m<=merges.length;m++)if(states.some(s=>s[m].length!==s[m-1].length))changes.push(m);
+  let k=0;const draw=()=>{const m=changes[k];
+    ws.forEach((w,i)=>{const el=$("stage").querySelector(`[data-w="${i}"]`);if(!el)return;const s=states[i][m],prev=m?states[i][changes[Math.max(0,k-1)]]:s;
+      el.innerHTML=s.map(x=>`<span class="pc${m&&!prev.includes(x)&&x.length>1?" fresh":""}">${esc(x)}</span>`).join("")});
+    $("mergeNote").innerHTML=m?`merge ${m}: ${esc(merges[m-1][0])} + ${esc(merges[m-1][1])} → <b>${esc(merges[m-1].join(""))}</b>`:"start: one piece per letter";
+    if(++k>=changes.length){clearInterval(mergeTimer);setTimeout(()=>{if(cur===2)$("mergeNote").textContent="done"},900)}};
+  draw();mergeTimer=setInterval(draw,matchMedia("(prefers-reduced-motion: reduce)").matches?50:500);
 }
+function stopPlay(){clearInterval(playTimer);playTimer=null;$("play").textContent="Play all"}
+$("play").onclick=()=>{if(playTimer){stopPlay();return}if(cur===STEPS.length-1)go(0);$("play").textContent="Pause";
+  playTimer=setInterval(()=>{if(cur>=STEPS.length-1){stopPlay();return}go(cur+1)},3800)};
+$("prev").onclick=()=>{stopPlay();go(cur-1)};$("next").onclick=()=>{stopPlay();go(cur+1)};
+document.addEventListener("keydown",e=>{if(e.target.matches("input,textarea"))return;if(e.key==="ArrowRight"){stopPlay();go(cur+1)}if(e.key==="ArrowLeft"){stopPlay();go(cur-1)}});
 
-/* ---------- rendering ---------- */
-function vecHtml(e){const max=Math.max(2,...E.flat().map(Math.abs));
-  return `<div class="vec">`+e.map(v=>{const w=Math.min(50,Math.abs(v)/max*50);
-    return `<div><span class="num">${v.toFixed(2)}</span><span class="track"><i class="${v<0?"n":""}" style="left:${v<0?50-w:50}%;width:${w}%"></i></span></div>`}).join("")+`</div>`}
-function renderTrace(){
-  const ws=words($("sentence").value);
-  if(!ws.length){$("trace").innerHTML=`<tr><td style="text-align:left;color:var(--muted)">Type a sentence above.</td></tr>`;$("unkNote").hidden=true;$("traceNote").textContent="";renderVocab([]);return}
-  const ids=ws.map(w=>Math.max(0,vocab.indexOf(w)));
-  const unk=ws.filter(w=>!vocab.includes(w));
-  $("trace").innerHTML=
-    `<tr><th>1 · Text</th>${ws.map((w,i)=>`<td><span class="word${ids[i]?"":" unk"}">${esc(w)}</span></td>`).join("")}</tr>`+
-    `<tr class="arrow"><th></th>${ws.map(()=>`<td>↓ tokenizer looks it up</td>`).join("")}</tr>`+
-    `<tr><th>2 · Token ID</th>${ids.map(id=>`<td><span class="id${id?"":" unk"}">${id}</span></td>`).join("")}</tr>`+
-    `<tr class="arrow"><th></th>${ids.map(id=>`<td>↓ fetch row ${id}</td>`).join("")}</tr>`+
-    `<tr><th>3 · Embedding</th>${ids.map(id=>`<td>${vecHtml(E[id])}</td>`).join("")}</tr>`;
-  if(unk.length){$("unkNote").hidden=false;
-    $("unkNote").innerHTML=`<b>${unk.map(w=>`"${esc(w)}"`).join(", ")}</b> ${unk.length>1?"are":"is"} not in the training text, so the tokenizer has no ID for ${unk.length>1?"them":"it"} and uses <code>[UNK]</code> (ID 0, "unknown"). The meaning is lost. <a href="#newWord">See how real models avoid this</a>.`}
-  else $("unkNote").hidden=true;
-  $("traceNote").innerHTML=`<b>${ws.length} tokens</b> became <b>${ws.length} IDs</b>, and each ID fetched a row of <b>2 numbers</b>. ${rounds?`These numbers were learned in ${rounds} rounds of training.`:`These numbers are still random. Train the embeddings below and watch them change.`}`;
-  renderVocab(ids);
+/* ---------- real tokenizer (GPT-4o, o200k) loaded from a CDN ---------- */
+let REAL=null;
+function renderReal(){
+  const t=$("realInput").value;$("rChars").textContent=[...t].length;
+  if(!REAL)return;const ids=REAL.encode(t);
+  $("realToks").innerHTML=ids.length?ids.map(id=>{const s=REAL.decode([id]);return`<span class="rt">${esc(s).replace(/^ /,'<span class="sp">·</span>')}<small>${id}</small></span>`}).join(""):`<span class="small" style="margin:0">Type some text.</span>`;
+  $("rTok").textContent=ids.length;$("rVocab").textContent=(REAL.vocabularySize||200019).toLocaleString("en-US");
 }
-function renderVocab(ids){const used=new Set(ids);
-  $("vocab").innerHTML=vocab.map((w,i)=>`<span class="ve${used.has(i)?" on":""}"><span>${esc(w)}</span><span>${i}</span></span>`).join("")}
+(function loadReal(){const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/gpt-tokenizer@2.8.1/dist/o200k_base.js";s.async=true;
+  s.onload=()=>{REAL=window.GPTTokenizer_o200k_base||null;if(!REAL){fail();return}renderReal()};
+  const fail=()=>{$("realToks").innerHTML=`<span class="small" style="margin:0">The real tokenizer couldn't load. It needs an internet connection.</span>`};s.onerror=fail;document.head.appendChild(s)})();
+
+/* ---------- map ---------- */
+function mapTokens(){const used=new Set(trainIds());return vocab.map((w,i)=>({w,i})).filter(p=>p.i>0&&used.has(p.i))}
 function renderPlot(){
-  const svg=$("plot");const W=640,H=440,pad=50;
-  const pts0=vocab.map((w,i)=>({w,i})).filter(p=>p.i>0);
+  const svg=$("plot");const W=640,H=440,pad=50;const pts0=mapTokens();
+  if(!pts0.length){svg.innerHTML="";return}
   const xs=pts0.map(p=>E[p.i][0]),ys=pts0.map(p=>E[p.i][1]);
   let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
   const span=Math.max(x1-x0,y1-y0,1);const cx=(x0+x1)/2,cy=(y0+y1)/2;x0=cx-span/2;x1=cx+span/2;y0=cy-span/2;y1=cy+span/2;
   const sx=v=>pad+(v-x0)/(x1-x0)*(W-2*pad),sy=v=>H-pad-(v-y0)/(y1-y0)*(H-2*pad);
-  const inS=new Set(words($("sentence").value).map(w=>vocab.indexOf(w)).filter(i=>i>0));
+  const inS=new Set(tokenize($("sentence").value).map(t=>t.id));
   let h=`<line x1="${pad}" y1="${H-pad+16}" x2="${W-pad}" y2="${H-pad+16}"/><line x1="${pad-16}" y1="${pad}" x2="${pad-16}" y2="${H-pad}"/>`+
-    `<text class="axis" x="${W-pad}" y="${H-pad+32}" text-anchor="end">dimension 1 →</text>`+
-    `<text class="axis" x="${pad-20}" y="${pad-14}">↑ dimension 2</text>`;
-  const used=[];const pts=pts0.map(p=>({...p,x:sx(E[p.i][0]),y:sy(E[p.i][1])}));
-  pts.sort((a,b)=>(inS.has(a.i)?1:0)-(inS.has(b.i)?1:0)).forEach(p=>{let ly=p.y-10,t=0;
-    while(used.some(u=>Math.abs(u.x-p.x)<60&&Math.abs(u.y-ly)<15)&&t<6){ly+=16;t++}used.push({x:p.x,y:ly});
-    const end=p.x>W-100;const hit=inS.has(p.i);
-    h+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${hit?8:6}" data-i="${p.i}" class="${hit?"hit":""}${selected===p.i?" sel":""}"><title>${esc(p.w)}</title></circle>`+
-      `<text x="${(end?p.x-10:p.x+10).toFixed(1)}" y="${(ly+4).toFixed(1)}" text-anchor="${end?"end":"start"}" class="${hit?"hit":""}">${esc(p.w)}</text>`});
-  svg.innerHTML=h;
-  svg.querySelectorAll("circle").forEach(c=>c.onclick=()=>{selected=+c.dataset.i;renderPlot();renderNear()});
+    `<text class="axis" x="${W-pad}" y="${H-pad+32}" text-anchor="end">number 1 →</text><text class="axis" x="${pad-20}" y="${pad-14}">↑ number 2</text>`;
+  const used=[];pts0.map(p=>({...p,x:sx(E[p.i][0]),y:sy(E[p.i][1])})).sort((a,b)=>(inS.has(a.i)?1:0)-(inS.has(b.i)?1:0)).forEach(p=>{
+    let ly=p.y-10,t=0;while(used.some(u=>Math.abs(u.x-p.x)<60&&Math.abs(u.y-ly)<15)&&t<6){ly+=16;t++}used.push({x:p.x,y:ly});
+    const end=p.x>W-100,hit=inS.has(p.i);
+    h+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${hit?8:6}" data-i="${p.i}" class="${hit?"hit":""}${selected===p.i?" sel":""}"><title>${esc(p.w)}</title></circle><text x="${(end?p.x-10:p.x+10).toFixed(1)}" y="${(ly+4).toFixed(1)}" text-anchor="${end?"end":"start"}" class="${hit?"hit":""}">${esc(p.w)}</text>`});
+  svg.innerHTML=h;svg.querySelectorAll("circle").forEach(c=>c.onclick=()=>{selected=+c.dataset.i;renderPlot();renderNear()});
 }
 function renderNear(){
   if(selected===null){$("nearBox").innerHTML=`<p>Click any point to see which tokens ended up closest to it.</p>`;return}
-  const e=E[selected];const d=vocab.map((w,i)=>({w,i,d:Math.hypot(E[i][0]-e[0],E[i][1]-e[1])})).filter(x=>x.i>0&&x.i!==selected).sort((a,b)=>a.d-b.d).slice(0,4);
+  const e=E[selected];const d=mapTokens().filter(x=>x.i!==selected).map(x=>({...x,d:Math.hypot(E[x.i][0]-e[0],E[x.i][1]-e[1])})).sort((a,b)=>a.d-b.d).slice(0,4);
   $("nearBox").innerHTML=`<p><b>Closest to <code>${esc(vocab[selected])}</code></b></p><ul class="near">${d.map(x=>`<li><span>${esc(x.w)}</span><span>${x.d.toFixed(2)}</span></li>`).join("")}</ul>`;
 }
 function renderStatus(){
   $("sRounds").textContent=rounds;$("sLoss").textContent=lossHist.length?lossHist[lossHist.length-1].toFixed(2):"–";
-  const s=$("status");
-  if(running)s.innerHTML=`<p><b>Training.</b> Each token pair (current → next) nudges the current token's row. Watch the points move.</p>`;
+  const small=mapTokens().length<12,s=$("status");
+  if(running)s.innerHTML=`<p><b>Training.</b> Each pair of neighbouring tokens nudges the first token's two numbers, so its point moves.</p>`;
   else if(!rounds)s.innerHTML=`<p><b>Random start.</b> The points are placed by random numbers, so the map means nothing yet. Orange points are the tokens in your sentence.</p>`;
-  else s.innerHTML=`<p><b>After ${rounds} rounds.</b> Tokens that are followed by similar tokens have moved close together.</p><p>Nobody labelled any groups. The positions come only from predicting the next token, and that's how embeddings come to carry meaning.</p>`;
+  else s.innerHTML=`<p><b>After ${rounds} rounds.</b> Tokens that are followed by similar tokens have moved close together.</p>`+(small?`<p>With only a few sentences there is little to learn. Try the bigger example text to see similar words group together.</p>`:`<p>Nobody labelled any groups. The positions come only from predicting the next token, and that's how embeddings come to carry meaning.</p>`);
 }
-function newWordDefault(){
-  const cands=vocab.filter(w=>/^[a-z]{4,}$/.test(w)).sort((a,b)=>b.length-a.length);
-  for(const w of cands){const v=w.endsWith("s")?w.slice(0,-1)+"ing":w.endsWith("y")?w.slice(0,-1)+"ies":w+"s";if(!vocab.includes(v))return v}
-  return "puppies";
-}
-function renderBuilder(){
-  const w=$("newWord").value.toLowerCase().replace(/[^a-z]/g,"");
-  const known=vocab.includes(w);
-  $("wordOut").innerHTML=w?`<span class="pc${known?"":" unk"}">${known?esc(w):UNK}<small>ID ${known?vocab.indexOf(w):0}</small></span>`:"";
-  $("wordVerdict").textContent=!w?"":known?`"${w}" is in the training text, so it has its own ID. Try a word that isn't.`:`"${w}" is not in the vocabulary, so it becomes [UNK]. The model can't tell it apart from any other unknown word.`;
-  mStates=w?buildStates(w):[];if(mState>=mStates.length)mState=Math.max(0,mStates.length-1);
-  renderPieces();
-}
-function renderPieces(){
-  if(!mStates.length){$("bpeOut").innerHTML="";$("mstep").textContent="";$("bpeVerdict").textContent="";return}
-  const cur=mStates[mState];const prev=mState>0?mStates[mState-1]:null;
-  const glued=cur.merge?cur.merge[0]+cur.merge[1]:null;
-  $("bpeOut").innerHTML=cur.s.map(p=>{const id=pieceVocab.indexOf(p);return`<span class="pc${prev&&p===glued?" fresh":""}">${esc(p)}<small>ID ${id<0?0:id}</small></span>`}).join("");
-  const total=mStates.length-1;
-  $("mstep").innerHTML=mState===0?`Start: one piece per letter. ${total} learned merge${total===1?"":"s"} apply to this word.`:
-    `Merge ${mState} of ${total}: ${esc(cur.merge[0])} + ${esc(cur.merge[1])} → <b>${esc(glued)}</b>`;
-  $("mNext").disabled=mState>=total;
-  $("bpeVerdict").textContent=mState<total?"":`Done: ${cur.s.length} piece${cur.s.length>1?"s":""}, every one with an ID. Nothing is unknown, and the model can still see what the word is made of.`;
-}
-function renderAll(){renderTrace();renderPlot();renderNear();renderStatus();renderBuilder()}
-
 function train(){
   if(running)return;const n=Math.max(1,Math.min(3000,Math.round(+$("rounds").value||1)));$("rounds").value=n;
-  running=true;renderStatus();const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const per=reduce?n:Math.max(1,Math.ceil(n/60));let done=0;
-  const step=()=>{const k=Math.min(per,n-done);for(let i=0;i<k;i++)trainRound();done+=k;renderPlot();renderTrace();renderNear();
+  running=true;renderStatus();const per=Math.max(1,Math.ceil(n/60));let done=0;
+  const step=()=>{const k=Math.min(per,n-done);for(let i=0;i<k;i++)trainRound();done+=k;renderPlot();renderNear();
     $("sRounds").textContent=rounds;$("sLoss").textContent=lossHist[lossHist.length-1].toFixed(2);
-    if(done<n)setTimeout(step,30);else{running=false;renderStatus()}};
+    if(done<n)setTimeout(step,30);else{running=false;renderStatus();if(cur>=5)renderStage()}};
   step();
 }
-function firstSentence(){const t=words($("corpus").value);const i=t.indexOf(".");return(i>0?t.slice(0,i):t.slice(0,6)).join(" ")}
+function firstSentence(){const m=$("corpus").value.match(/[^.!?]+[.!?]?/);return m?m[0].trim():""}
+function rebuild(){learnTokenizer();initEmb();renderStage();renderRail();renderPlot();renderNear();renderStatus()}
+function startText(){let t=null;try{t=localStorage.getItem("tll-corpus")}catch(e){}
+  const ok=t&&normalize(t).length>=4;$("srcNote").textContent=ok?"· from the Tiny LLM Lab":"· default";return ok?t.trim():LAB_DEFAULT}
 
-$("sentence").oninput=()=>{renderTrace();renderPlot()};
-$("newWord").oninput=()=>{mState=0;renderBuilder()};
-$("mStart").onclick=()=>{mState=0;renderPieces()};
-$("mNext").onclick=()=>{if(mState<mStates.length-1){mState++;renderPieces()}};
-$("mAll").onclick=()=>{mState=Math.max(0,mStates.length-1);renderPieces()};
+$("sentence").oninput=()=>{renderStage();renderPlot()};
+$("realInput").oninput=renderReal;
 $("trainBtn").onclick=train;
-$("resetBtn").onclick=()=>{if(running)return;buildModel();renderAll()};
-$("relearn").onclick=()=>{if(running)return;buildModel();$("sentence").value=firstSentence();$("newWord").value=newWordDefault();mState=0;renderAll()};
+$("resetBtn").onclick=()=>{if(running)return;initEmb();renderStage();renderPlot();renderNear();renderStatus()};
+$("relearn").onclick=()=>{if(running)return;$("srcNote").textContent="· edited";rebuild()};
+$("bigBtn").onclick=()=>{if(running)return;$("corpus").value=BIG;$("srcNote").textContent="· bigger example";$("trainBox").open=true;$("sentence").value=firstSentence();$("realInput").value=$("sentence").value;rebuild();renderReal();train()};
 
 $("corpus").value=startText();
-buildModel();
 $("sentence").value=firstSentence();
-$("newWord").value=newWordDefault();
-renderAll();
+$("realInput").value=$("sentence").value;
+learnTokenizer();initEmb();go(0);renderPlot();renderNear();renderStatus();renderReal();
 </script>
 </body>
 </html>

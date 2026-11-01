@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mini Transformer Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the architecture diagram is the spine. Left: the stack of blocks a prompt flows through, each tagged with the lab that covered it. Right: the live numbers inside the selected block */
+:root{
+  --bg:#f2f4f7; --panel:#ffffff; --ink:#152033; --muted:#5a6578; --line:#d9dfe8; --cell:#edf0f5;
+  --pos:#1d63c9; --neg:#d0532a; --good:#18805a; --warn:#a86a00; --on-strong:#ffffff;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d131e; --panel:#151d2b; --ink:#e5ebf4; --muted:#95a1b5; --line:#283346; --cell:#1b2434;
+  --pos:#5b9dff; --neg:#ff8656; --good:#45cf95; --warn:#f0b13c; --on-strong:#0d131e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d131e; --panel:#151d2b; --ink:#e5ebf4; --muted:#95a1b5; --line:#283346; --cell:#1b2434;
+  --pos:#5b9dff; --neg:#ff8656; --good:#45cf95; --warn:#f0b13c; --on-strong:#0d131e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;margin:0;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+nav.pages{display:flex;gap:6px;flex-wrap:wrap;font:600 14px var(--body)}
+nav.pages a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
+nav.pages a:hover{color:var(--ink);border-color:var(--muted)}
+nav.pages a[aria-current="page"]{color:var(--on-strong);background:var(--ink);border-color:var(--ink)}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 24px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:8px 0 0;max-width:68ch}
+.badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;font-weight:600;
+  padding:8px 14px;border-radius:999px;border:1.5px solid currentColor;white-space:nowrap}
+.badge::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+.badge.raw{color:var(--muted)} .badge.train{color:var(--warn)} .badge.frozen{color:var(--pos)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;min-width:0}
+.sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.step{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pos);font-weight:600}
+h2{font-family:var(--display);font-weight:700;font-size:26px;margin:0;text-wrap:balance}
+h3{font:700 21px var(--display);margin:0}
+.lead{margin:0 0 16px;max-width:70ch;color:var(--muted)}
+.lead b{color:var(--ink);font-weight:600}
+textarea,input[type=text],input[type=number]{width:100%;font:500 17px/1.5 var(--mono);color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+input[type=number]{width:96px;padding:9px 10px}
+textarea:focus,input:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--pos);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row label{font-size:14px;color:var(--muted)}
+button{font:600 15px var(--body);color:var(--ink);background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:10px 16px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--pos);border-color:var(--pos);color:var(--on-strong)}
+button:disabled{opacity:.45;cursor:default}
+.small{font-size:14px;color:var(--muted);margin:8px 0 0}
+.small b{color:var(--ink)}
+code{font:600 13px var(--mono);background:var(--cell);border-radius:4px;padding:1px 5px}
+.err{font-size:14px;color:var(--neg);min-height:1.3em;margin:6px 0 0}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:16px}
+.stat{background:var(--cell);border-radius:10px;padding:10px 12px}
+.stat span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.stat strong{font:600 22px var(--mono);font-variant-numeric:tabular-nums}
+svg.spark{display:block;width:100%;height:36px}
+
+/* the context test */
+.test{margin-top:18px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.test-head{padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.test-head b{font-weight:600}
+.test-tbl{overflow-x:auto}
+table.t{border-collapse:collapse;width:100%;font:15px var(--mono)}
+.t th{font:600 12px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 16px;border-bottom:1px solid var(--line)}
+.t td{padding:10px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+.t tr:last-child td{border-bottom:0}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:600}
+.pill.ok{background:color-mix(in oklab,var(--good) 18%,var(--panel));color:var(--good)}
+.pill.meh{background:color-mix(in oklab,var(--neg) 14%,var(--panel));color:var(--neg)}
+
+/* architecture */
+.arch{display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px;margin-top:16px;align-items:start}
+@media (max-width:900px){.arch{grid-template-columns:minmax(0,1fr)}}
+.stack{display:flex;flex-direction:column;align-items:stretch;gap:0;position:sticky;top:16px}
+@media (max-width:900px){.stack{position:static}}
+.blk{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;text-align:left;width:100%;padding:10px 12px;border-radius:10px;background:var(--panel);border:1.5px solid var(--line);white-space:normal}
+.blk .n{font:600 12px var(--mono);color:var(--muted);width:18px}
+.blk .nm{font:600 15px var(--body);line-height:1.2}
+.blk .ds{display:block;font:400 12.5px var(--body);color:var(--muted)}
+.blk.cur{border-color:var(--pos);background:color-mix(in oklab,var(--pos) 9%,var(--panel))}
+.blk.cur .n{color:var(--pos)}
+.conn{height:16px;display:flex;justify-content:center}
+.conn::before{content:"";width:2px;background:var(--line);height:100%}
+.frame{border:1.5px dashed var(--muted);border-radius:12px;padding:26px 10px 10px;position:relative}
+.frame-lbl{position:absolute;top:6px;left:12px;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tag{font:600 10.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:5px;border:1px solid currentColor;white-space:nowrap}
+.tag.l1{color:var(--pos)} .tag.l2{color:var(--good)} .tag.new{color:var(--warn)}
+.legend{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:13px;color:var(--muted)}
+.lg{display:flex;gap:8px;align-items:center}
+.panel{min-width:0;border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:20px;display:flex;flex-direction:column;gap:14px;animation:in .3s ease}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.panel p{margin:0;max-width:70ch}
+.panel .real{color:var(--muted);font-size:14.5px}
+.panel-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.toks{display:flex;flex-wrap:wrap;gap:8px}
+.tk{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
+.tname{font:600 18px var(--mono);padding:5px 11px;border-radius:9px;background:var(--panel);border:1px solid var(--line)}
+.tname.start{color:var(--muted)}
+.tid{font:600 15px var(--mono);color:var(--pos);border:2px solid var(--pos);border-radius:999px;padding:1px 10px;background:var(--panel)}
+.strips{display:grid;grid-template-columns:auto auto;gap:6px 12px;align-items:center;overflow-x:auto;padding-bottom:4px}
+.strips .lbl{font:600 14px var(--mono);text-align:right;white-space:nowrap}
+.strip{display:flex;gap:2px}
+.strip i{width:14px;height:22px;border-radius:3px;flex:none}
+.strip.sm i{width:8px}
+.sum{display:grid;grid-template-columns:auto auto auto auto auto auto;gap:6px 8px;align-items:center;overflow-x:auto;padding-bottom:4px;font:600 14px var(--mono)}
+.sum .op{color:var(--muted);text-align:center}
+.sum .h{font:600 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.att-wrap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:640px){.att-wrap{grid-template-columns:minmax(0,1fr)}}
+table.att{border-collapse:separate;border-spacing:3px;font:13px var(--mono)}
+.att th{font-weight:600;color:var(--muted);padding:2px 4px;white-space:nowrap}
+.att thead th{height:70px;vertical-align:bottom}
+.att thead th div{writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto}
+.att tbody th{text-align:right;cursor:pointer}
+.att tbody tr.sel th{color:var(--pos)}
+.att td{width:42px;height:34px;text-align:center;border-radius:6px;font-variant-numeric:tabular-nums}
+.att td.mask{background:repeating-linear-gradient(45deg,var(--line) 0 2px,transparent 2px 7px)}
+.att tbody tr.sel td:not(.mask){box-shadow:inset 0 0 0 2px var(--pos)}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar-row{display:grid;grid-template-columns:84px minmax(0,1fr) 58px;align-items:center;gap:10px;font-family:var(--mono)}
+.bar-row .w{text-align:right;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.bar-track{height:22px;background:var(--cell);border-radius:6px;overflow:hidden}
+.bar-fill{height:100%;background:var(--pos);border-radius:6px;opacity:.5;transition:width .3s}
+.bar-row.top .bar-fill{opacity:1}
+.bars.l1 .bar-fill{background:var(--muted)}
+.bar-row .p{font-size:14px;text-align:right;font-variant-numeric:tabular-nums}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:18px}
+.cmp h4{font:600 15px var(--body);margin:0 0 8px}
+.lk{display:flex;flex-wrap:wrap;gap:6px}
+.lk span{font:13px var(--mono);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.ffn{display:flex;flex-direction:column;gap:6px;font:600 14px var(--mono)}
+.ffn .lbl{color:var(--muted);font-weight:400;font-size:13px}
+.out{font:600 20px/1.4 var(--mono);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;word-break:break-word}
+.out .new{color:var(--pos)}
+
+/* scale table */
+.scale-wrap{overflow-x:auto}
+table.scale{border-collapse:collapse;width:100%;font:15px var(--mono);font-variant-numeric:tabular-nums}
+.scale th,.scale td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.scale th:first-child,.scale td:first-child{text-align:left;font-family:var(--body);color:var(--muted)}
+.scale thead th{font:600 13px var(--body);color:var(--ink)}
+.scale thead th.me{color:var(--pos)}
+.scale td.me{color:var(--pos);font-weight:600}
+.foot{color:var(--muted);font-size:14px;max-width:84ch;margin:0}
+.foot a,.panel a{color:var(--pos)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="pages" aria-label="Pages"><a href="index.html">1 · Tiny LLM Lab</a><a href="tokens.html">2 · Text to numbers</a><a href="transformer.html" aria-current="page">3 · Transformer</a></nav>
+  <header>
+    <div>
+      <h1>Mini transformer</h1>
+      <p class="sub">The Tiny LLM Lab only looks at the last token. Real LLMs use a transformer, where every token can look back at all the tokens before it. This is a real one, small enough to see inside, trained in your browser.</p>
+    </div>
+    <span id="badge" class="badge raw">Untrained · random weights</span>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="step">Step 1 · Train</span><h2>Train it on a few sentences</h2></div>
+    <p class="lead">We add one sentence to the Tiny LLM Lab's text: <b>"Ruby likes River."</b> Now the word after "likes" depends on who is doing the liking, which the last word alone can't tell you.</p>
+    <label class="small" for="corpus" style="display:block;margin:0 0 6px">Training text</label>
+    <textarea id="corpus" rows="2" spellcheck="false">My puppy name is River. River likes Ruby. Ruby likes River.</textarea>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="trainBtn">Train</button>
+      <label for="steps">steps</label><input type="number" id="steps" value="300" min="10" max="3000" step="10">
+      <button id="resetBtn">Reset to random</button>
+      <button id="useText">Use edited text</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>Training steps</span><strong id="sSteps">0</strong></div>
+      <div class="stat"><span>Error (loss)</span><strong id="sLoss">–</strong></div>
+      <div class="stat"><span>Weights</span><strong id="sParams">–</strong></div>
+      <div class="stat"><span>Error over time</span><svg class="spark" id="spark" viewBox="0 0 160 36" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    </div>
+    <div class="test">
+      <div class="test-head"><b>The test:</b> same last word, different sentence. What comes next?</div>
+      <div class="test-tbl"><table class="t" id="testTbl"></table></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="step">Step 2 · Look inside</span><h2>Follow a prompt through the model</h2></div>
+    <p class="lead">Click any block, or step through them in order. Every number shown is computed live by this model for your prompt.</p>
+    <label class="small" for="prompt" style="display:block;margin:0 0 6px">Prompt</label>
+    <input type="text" id="prompt" value="River likes" spellcheck="false">
+    <p class="err" id="perr"></p>
+    <div class="arch">
+      <div>
+        <div class="stack" id="stack"></div>
+        <div class="legend"><span class="lg"><span class="tag l2">Lab 2</span>covered in Text to numbers</span><span class="lg"><span class="tag new">New</span>new in this lab</span><span class="lg"><span class="tag l1">Lab 1</span>covered in Tiny LLM Lab</span></div>
+      </div>
+      <div class="panel" id="panel"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="step">Scale</span><h2>From this mini model to real ones</h2></div>
+    <p class="lead">Same blocks, same training rule. Real models are bigger in every direction and stack the transformer block many times.</p>
+    <div class="scale-wrap"><table class="scale" id="scale"></table></div>
+  </section>
+
+  <p class="foot">A simplified model for understanding: one transformer block with one attention head, and no layer normalization. Real transformers use many heads per block, layer normalization, and dozens of stacked blocks, but every block does the same two jobs shown here: attention moves information between tokens, and the feed-forward network processes it inside each token. Back to <a href="index.html">the Tiny LLM Lab</a> or <a href="tokens.html">Text to numbers</a>.</p>
+</div>
+
+<script>
+/* MINI-TRANSFORMER-START */
+/* A one-layer, one-head transformer with token + position embeddings, causal self-attention,
+   a feed-forward network, residual connections and an output layer. Plain JS, manual backprop, Adam. */
+function MiniTransformer(V,opt){
+  opt=opt||{};const d=opt.d||16,f=opt.f||32,maxPos=opt.maxPos||16;let s=opt.seed||3;
+  const rnd=()=>{s|=0;s=s+0x6D2B79F5|0;let q=Math.imul(s^s>>>15,1|s);q=q+Math.imul(q^q>>>7,61|q)^q;return((q^q>>>14)>>>0)/4294967296};
+  const gauss=()=>{const u=rnd()||1e-9,v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+  const mat=(r,c,sc)=>Array.from({length:r},()=>Array.from({length:c},()=>sc?gauss()*sc:0));
+  const P={E:mat(V,d,.3),P:mat(maxPos,d,.1),Wq:mat(d,d,1/Math.sqrt(d)),Wk:mat(d,d,1/Math.sqrt(d)),Wv:mat(d,d,1/Math.sqrt(d)),
+    Wo:mat(d,d,1/Math.sqrt(d)),W1:mat(d,f,1/Math.sqrt(d)),c1:[Array(f).fill(0)],W2:mat(f,d,1/Math.sqrt(f)),c2:[Array(d).fill(0)],
+    U:mat(d,V,1/Math.sqrt(d)),b:[Array(V).fill(0)]};
+  const names=Object.keys(P);
+  const zeros=()=>Object.fromEntries(names.map(n=>[n,P[n].map(r=>r.map(()=>0))]));
+  const M=zeros(),S=zeros();let step=0;
+  const vm=(x,W)=>{const o=Array(W[0].length).fill(0);for(let i=0;i<x.length;i++){const xi=x[i];if(!xi)continue;const Wi=W[i];for(let j=0;j<o.length;j++)o[j]+=xi*Wi[j]}return o};
+  const mvT=(W,g)=>W.map(Wi=>{let a=0;for(let j=0;j<g.length;j++)a+=Wi[j]*g[j];return a});
+  const outer=(G,x,g)=>{for(let i=0;i<x.length;i++){const xi=x[i];if(!xi)continue;const Gi=G[i];for(let j=0;j<g.length;j++)Gi[j]+=xi*g[j]}};
+  const add=(a,b)=>a.map((v,i)=>v+b[i]);
+  const dot=(a,b)=>{let t=0;for(let i=0;i<a.length;i++)t+=a[i]*b[i];return t};
+  const softmax=r=>{const m=Math.max(...r);const e=r.map(v=>Math.exp(v-m));const z=e.reduce((a,c)=>a+c,0);return e.map(v=>v/z)};
+  function forward(ids){
+    const n=ids.length,sc=1/Math.sqrt(d);
+    const tok=ids.map(i=>P.E[i].slice()),pos=ids.map((_,t)=>P.P[Math.min(t,maxPos-1)].slice());
+    const x=tok.map((e,t)=>add(e,pos[t]));
+    const q=x.map(r=>vm(r,P.Wq)),k=x.map(r=>vm(r,P.Wk)),v=x.map(r=>vm(r,P.Wv));
+    const A=[],ctx=[];
+    for(let t=0;t<n;t++){const sc_=[];for(let u=0;u<=t;u++)sc_.push(dot(q[t],k[u])*sc);const a=softmax(sc_);A.push(a);
+      const c=Array(d).fill(0);for(let u=0;u<=t;u++)for(let j=0;j<d;j++)c[j]+=a[u]*v[u][j];ctx.push(c)}
+    const att=ctx.map(c=>vm(c,P.Wo)),h1=x.map((r,t)=>add(r,att[t]));
+    const z=h1.map(r=>add(vm(r,P.W1),P.c1[0])),relu=z.map(r=>r.map(v=>v>0?v:0));
+    const m=relu.map(r=>add(vm(r,P.W2),P.c2[0])),h2=h1.map((r,t)=>add(r,m[t]));
+    const logits=h2.map(r=>add(vm(r,P.U),P.b[0])),probs=logits.map(softmax);
+    return{ids,tok,pos,x,q,k,v,A,ctx,att,h1,z,relu,m,h2,logits,probs};
+  }
+  function lossGrad(seqs,G){
+    let L=0,N=0;seqs.forEach(sq=>N+=sq.length-1);
+    for(const ids of seqs){const F=forward(ids),n=ids.length,sc=1/Math.sqrt(d);
+      const dh2=[];for(let t=0;t<n;t++){
+        if(t<n-1){const p=F.probs[t];L-=Math.log(p[ids[t+1]]);const g=p.map((v,j)=>(v-(j===ids[t+1]?1:0))/N);
+          if(G){outer(G.U,F.h2[t],g);for(let j=0;j<g.length;j++)G.b[0][j]+=g[j]}dh2.push(mvT(P.U,g))}else dh2.push(Array(d).fill(0))}
+      if(!G)continue;
+      const dh1=[],dx=[],dctx=[];
+      for(let t=0;t<n;t++){const dm=dh2[t];outer(G.W2,F.relu[t],dm);for(let j=0;j<d;j++)G.c2[0][j]+=dm[j];
+        const dr=mvT(P.W2,dm),dz=dr.map((v,j)=>F.z[t][j]>0?v:0);outer(G.W1,F.h1[t],dz);for(let j=0;j<f;j++)G.c1[0][j]+=dz[j];
+        const g1=add(dh2[t],mvT(P.W1,dz));dh1.push(g1);outer(G.Wo,F.ctx[t],g1);dctx.push(mvT(P.Wo,g1));dx.push(g1.slice())}
+      const dq=F.q.map(()=>Array(d).fill(0)),dk=F.k.map(()=>Array(d).fill(0)),dv=F.v.map(()=>Array(d).fill(0));
+      for(let t=0;t<n;t++){const a=F.A[t];const da=[];for(let u=0;u<=t;u++){da.push(dot(dctx[t],F.v[u]));for(let j=0;j<d;j++)dv[u][j]+=a[u]*dctx[t][j]}
+        const sm=a.reduce((acc,au,u)=>acc+au*da[u],0);
+        for(let u=0;u<=t;u++){const ds=a[u]*(da[u]-sm)*sc;for(let j=0;j<d;j++){dq[t][j]+=ds*F.k[u][j];dk[u][j]+=ds*F.q[t][j]}}}
+      for(let t=0;t<n;t++){outer(G.Wq,F.x[t],dq[t]);outer(G.Wk,F.x[t],dk[t]);outer(G.Wv,F.x[t],dv[t]);
+        const g=add(add(dx[t],mvT(P.Wq,dq[t])),add(mvT(P.Wk,dk[t]),mvT(P.Wv,dv[t])));
+        const Ei=G.E[ids[t]],Pi=G.P[Math.min(t,maxPos-1)];for(let j=0;j<d;j++){Ei[j]+=g[j];Pi[j]+=g[j]}}
+    }
+    return L/Math.max(N,1);
+  }
+  function trainStep(seqs,lr){
+    const G=zeros();const L=lossGrad(seqs,G);step++;const b1=.9,b2=.999,eps=1e-8;
+    for(const n of names){const p=P[n],g=G[n],m=M[n],s2=S[n];
+      for(let i=0;i<p.length;i++)for(let j=0;j<p[i].length;j++){const gg=g[i][j];m[i][j]=b1*m[i][j]+(1-b1)*gg;s2[i][j]=b2*s2[i][j]+(1-b2)*gg*gg;
+        p[i][j]-=(lr||0.02)*(m[i][j]/(1-Math.pow(b1,step)))/(Math.sqrt(s2[i][j]/(1-Math.pow(b2,step)))+eps)}}
+    return L;
+  }
+  const count=()=>names.reduce((a,n)=>a+P[n].length*P[n][0].length,0);
+  return{P,d,f,maxPos,forward,lossGrad,trainStep,zeros,count,get steps(){return step}};
+}
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const normalize=t=>t.toLowerCase().replace(/([.,!?;:])/g," $1 ").split(/\s+/).filter(Boolean);
+const START="<start>",D=16,FF=32,MAXPOS=16,LR=0.02;
+let vocab=[],seqs=[],model=null,lossHist=[],running=false,cur=7,attRow=null,playTimer=null;
+
+function buildData(){
+  const t=normalize($("corpus").value);vocab=[START,...new Set(t)];seqs=[];let s=[0];
+  t.forEach(w=>{s.push(vocab.indexOf(w));if(w==="."||s.length>=MAXPOS){seqs.push(s);s=[0]}});if(s.length>1)seqs.push(s);
+}
+function newModel(){model=MiniTransformer(vocab.length,{d:D,f:FF,maxPos:MAXPOS,seed:3});lossHist=[]}
+const lossNow=()=>model.lossGrad(seqs);
+
+/* Lab 1 style: chances from the last token only, counted from the same text */
+function lastTokenChances(last){const c=Array(vocab.length).fill(0);seqs.forEach(s=>{for(let i=0;i<s.length-1;i++)if(s[i]===last)c[s[i+1]]++});
+  const tot=c.reduce((a,b)=>a+b,0);return tot?c.map(v=>v/tot):null}
+
+function contextIds(text){
+  const t=normalize(text);const lastDot=t.lastIndexOf(".");const sent=t.slice(lastDot+1);
+  const unknown=sent.filter(w=>!vocab.includes(w));if(unknown.length)return{err:`"${unknown[0]}" is not in the training text, so the model has no token for it.`};
+  return{ids:[0,...sent.map(w=>vocab.indexOf(w))].slice(-(MAXPOS))};
+}
+function topOf(p){let k=0;p.forEach((v,i)=>{if(v>p[k])k=i});return k}
+const pct=v=>(v*100).toFixed(v>0.995||v<0.005?0:1)+"%";
+
+/* ---------- colors ---------- */
+function heat(v,max){const p=Math.round(Math.min(Math.abs(v)/(max||1),1)*80);const col=v>=0?"var(--pos)":"var(--neg)";return`color-mix(in oklab, ${col} ${p}%, var(--panel))`}
+function strip(vec,max,sm){return`<div class="strip${sm?" sm":""}">${vec.map(v=>`<i style="background:${heat(v,max)}" title="${v.toFixed(3)}"></i>`).join("")}</div>`}
+const mx=arrs=>Math.max(0.01,...arrs.flat().map(Math.abs));
+
+/* ---------- training ---------- */
+function renderStats(){
+  $("sSteps").textContent=model.steps;$("sLoss").textContent=lossHist.length?lossHist[lossHist.length-1].toFixed(3):lossNow().toFixed(3);
+  $("sParams").textContent=model.count().toLocaleString("en-US");
+  const h=lossHist;if(h.length<2){$("spark").innerHTML="";}else{const m=Math.max(...h);
+    $("spark").innerHTML=`<polyline points="${h.map((v,i)=>`${(i/(h.length-1)*160).toFixed(1)},${(34-v/m*32).toFixed(1)}`).join(" ")}" fill="none" stroke="var(--pos)" stroke-width="2" vector-effect="non-scaling-stroke"/>`}
+  const b=$("badge");if(running){b.className="badge train";b.textContent="Training · weights changing"}
+  else if(!model.steps){b.className="badge raw";b.textContent="Untrained · random weights"}else{b.className="badge frozen";b.textContent="Trained · weights frozen"}
+}
+function train(){
+  if(running)return;const n=Math.max(10,Math.min(3000,Math.round(+$("steps").value||300)));$("steps").value=n;running=true;renderStats();
+  const per=Math.max(1,Math.ceil(n/50));let done=0;
+  const step=()=>{const k=Math.min(per,n-done);let L;for(let i=0;i<k;i++)L=model.trainStep(seqs,LR);done+=k;lossHist.push(L);renderStats();renderTest();renderPanel(true);
+    if(done<n)setTimeout(step,20);else{running=false;renderStats();renderTest();renderPanel(true)}};
+  step();
+}
+
+/* ---------- the context test ---------- */
+function testPrompts(){
+  const byLast=new Map();seqs.forEach(s=>{for(let i=1;i<s.length-1;i++){const k=s[i];if(!byLast.has(k))byLast.set(k,new Set());byLast.get(k).add(s.slice(0,i+1).join(","))}});
+  const amb=[...byLast.entries()].filter(([k,ctx])=>{const p=lastTokenChances(k);return p&&Math.max(...p)<0.99&&ctx.size>1});
+  const out=[];amb.slice(0,2).forEach(([k,ctx])=>[...ctx].slice(0,2).forEach(c=>out.push(c.split(",").map(Number))));
+  return out.slice(0,4);
+}
+function renderTest(){
+  const ps=testPrompts();const tbl=$("testTbl");
+  if(!ps.length){tbl.innerHTML=`<tr><td style="white-space:normal;color:var(--muted)">This text has no word that is followed by different words in different sentences, so the last word is always enough. Use the default text to see the difference.</td></tr>`;return}
+  tbl.innerHTML=`<thead><tr><th>Prompt</th><th>Should be</th><th>Last token only (Lab 1)</th><th>Transformer</th></tr></thead><tbody>`+ps.map(ids=>{
+    const s=seqs.find(q=>q.slice(0,ids.length).join()===ids.join());const truth=s?vocab[s[ids.length]]:"?";
+    const l1=lastTokenChances(ids[ids.length-1]);const l1k=topOf(l1);
+    const F=model.forward(ids);const p=F.probs[F.probs.length-1];const k=topOf(p);
+    return`<tr><td>${esc(ids.slice(1).map(i=>vocab[i]).join(" "))} …</td><td>${esc(truth)}</td>`+
+      `<td><span class="pill ${l1[l1k]>0.9&&vocab[l1k]===truth?"ok":"meh"}">${esc(vocab[l1k])} ${pct(l1[l1k])}</span></td>`+
+      `<td><span class="pill ${vocab[k]===truth&&p[k]>0.5?"ok":"meh"}">${esc(vocab[k])} ${pct(p[k])}</span></td></tr>`}).join("")+"</tbody>";
+}
+
+/* ---------- architecture blocks ---------- */
+const BLOCKS=[
+ {nm:"Text",ds:"your prompt",tag:"l2"},
+ {nm:"Tokens and IDs",ds:"the tokenizer",tag:"l2"},
+ {nm:"Token embeddings",ds:"one row per token",tag:"l2"},
+ {nm:"Position embeddings",ds:"where each token is",tag:"new"},
+ {nm:"Attention",ds:"tokens look back",tag:"new",frame:true},
+ {nm:"Feed-forward",ds:"each token on its own",tag:"new",frame:true},
+ {nm:"Output weights",ds:"a score per token",tag:"l1"},
+ {nm:"Softmax and pick",ds:"chances, next token",tag:"l1"}];
+const TAGTXT={l1:"Lab 1",l2:"Lab 2",new:"New"};
+function renderStack(){
+  const b=i=>`<button class="blk${i===cur?" cur":""}" data-i="${i}"><span class="n">${i+1}</span><span><span class="nm">${BLOCKS[i].nm}</span><span class="ds">${BLOCKS[i].ds}</span></span><span class="tag ${BLOCKS[i].tag}">${TAGTXT[BLOCKS[i].tag]}</span></button>`;
+  const c=`<div class="conn"></div>`;
+  $("stack").innerHTML=b(0)+c+b(1)+c+b(2)+c+b(3)+c+`<div class="frame"><span class="frame-lbl">Transformer block · ×1 here</span>${b(4)}${c}${b(5)}</div>`+c+b(6)+c+b(7);
+  $("stack").querySelectorAll(".blk").forEach(el=>el.onclick=()=>{stopPlay();cur=+el.dataset.i;renderStack();renderPanel()});
+}
+function nav(){return`<div class="nav"><button id="pPrev" ${cur===0?"disabled":""}>← Back</button><button class="primary" id="pNext" ${cur===BLOCKS.length-1?"disabled":""}>Next block →</button><button id="pPlay">${playTimer?"Pause":"Play all"}</button></div>`}
+function bindNav(){$("pPrev").onclick=()=>{stopPlay();go(cur-1)};$("pNext").onclick=()=>{stopPlay();go(cur+1)};
+  $("pPlay").onclick=()=>{if(playTimer){stopPlay();renderPanel(true);return}if(cur===BLOCKS.length-1)go(0);playTimer=setInterval(()=>{if(cur>=BLOCKS.length-1){stopPlay();renderPanel(true);return}go(cur+1)},4500);renderPanel(true)}}
+function go(i){cur=Math.max(0,Math.min(BLOCKS.length-1,i));renderStack();renderPanel()}
+function stopPlay(){clearInterval(playTimer);playTimer=null}
+
+function renderPanel(quiet){
+  const P=$("panel");if(!quiet){P.style.animation="none";void P.offsetWidth;P.style.animation=""}
+  const B=BLOCKS[cur];const head=`<div class="panel-head"><span class="tag ${B.tag}">${TAGTXT[B.tag]}</span><h3>${cur+1}. ${B.nm}</h3></div>`;
+  const ctx=contextIds($("prompt").value);$("perr").textContent=ctx.err||"";
+  if(ctx.err){P.innerHTML=head+`<p class="real">Fix the prompt above to see the numbers.</p>`+nav();bindNav();return}
+  const ids=ctx.ids,F=model.forward(ids),n=ids.length,names=ids.map(i=>vocab[i]),last=n-1;
+  const tokChip=(i,t)=>`<span class="tname${t===START?" start":""}">${esc(t)}</span>`;
+  let body="";
+  if(cur===0){
+    body=`<div class="toks">${names.map((t,i)=>tokChip(i,t)).join("")}</div>
+      <p>Your prompt, plus a <code>${esc(START)}</code> token at the front so the model knows where the sentence begins. Real models add a start token too. This model reads one sentence at a time, so only the words after the last full stop count.</p>`;
+  }else if(cur===1){
+    body=`<div class="toks">${names.map((t,i)=>`<span class="tk">${tokChip(i,t)}<span class="tid">${ids[i]}</span></span>`).join("")}</div>
+      <p>The tokenizer splits the text into tokens and replaces each with its ID, its position in the vocabulary. Exactly what you stepped through in <a href="tokens.html">Lab 2</a>. To keep this lab simple, every word here is one token.</p>
+      <p class="real">Vocabulary: ${vocab.map((v,i)=>`${esc(v)}=${i}`).join(", ")}</p>`;
+  }else if(cur===2){
+    const m=mx(F.tok);
+    body=`<div class="strips">${names.map((t,i)=>`<span class="lbl">${esc(t)}</span>${strip(F.tok[i],m)}`).join("")}</div>
+      <p>Each ID fetches its row from the token embedding table: <b>${D} numbers</b> per token (blue positive, orange negative, hover for values). In Lab 2 the rows had 2 numbers so they fit on a map; this model needs more room to work.</p>`;
+  }else if(cur===3){
+    const m=mx([...F.tok,...F.pos,...F.x]);
+    body=`<div class="sum"><span></span><span class="h">token</span><span></span><span class="h">position</span><span></span><span class="h">input to the block</span>
+      ${names.map((t,i)=>`<span class="lbl" style="text-align:right">${esc(t)}</span>${strip(F.tok[i],m,1)}<span class="op">+</span>${strip(F.pos[i],m,1)}<span class="op">=</span>${strip(F.x[i],m,1)}`).join("")}</div>
+      <p>Attention, the next step, compares tokens with each other but has no sense of order on its own. So each position (first, second, third…) has its own learned row of numbers, added to the token's row. Without this, "river likes ruby" and "ruby likes river" would look the same to the model.</p>`;
+  }else if(cur===4){
+    if(attRow===null||attRow>=n)attRow=last;
+    const a=F.A[attRow];const order=a.map((v,i)=>[i,v]).sort((x,y)=>y[1]-x[1]);
+    body=`<div class="att-wrap"><div style="overflow-x:auto"><table class="att"><thead><tr><th></th>${names.map(t=>`<th><div>${esc(t)}</div></th>`).join("")}</tr></thead><tbody>${
+      names.map((t,r)=>`<tr class="${r===attRow?"sel":""}" data-r="${r}"><th>${esc(t)}</th>${names.map((_,c)=>c>r?`<td class="mask"></td>`:`<td style="background:${heat(F.A[r][c],1)};color:${F.A[r][c]>0.55?"var(--on-strong)":"var(--ink)"}">${Math.round(F.A[r][c]*100)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+      <p class="small">rows: the token doing the looking · columns: the tokens it looks at · % of its attention</p></div>
+      <div><p style="margin-bottom:8px">While working on <b>${esc(names[attRow])}</b>, it looked at:</p><div class="bars">${order.map(([i,v],k)=>`<div class="bar-row${k===0?" top":""}"><span class="w">${esc(names[i])}</span><div class="bar-track"><div class="bar-fill" style="width:${(v*100).toFixed(1)}%"></div></div><span class="p">${pct(v)}</span></div>`).join("")}</div></div></div>
+      <p>This is what Lab 1 was missing. Each token asks a question (its <b>query</b>), every token before it offers a label (its <b>key</b>), and a good match means more attention. The token then takes in a mix of those tokens' information (their <b>values</b>), weighted by these percentages. Click a row to see another token.</p>
+      <p class="real">${model.steps?(names[attRow]==="likes"?`After training, "likes" looks mostly at the name before it: that's how it knows who is doing the liking.`:`These percentages were learned in training; no one programmed them.`):`The model is untrained, so these percentages are random. Train it and come back.`} The striped cells are hidden on purpose: a token can't look at tokens after it, because when the model writes, those don't exist yet.</p>`;
+  }else if(cur===5){
+    const m=mx([F.h1[last],F.m[last],F.h2[last]]),mr=mx([F.relu[last]]);
+    body=`<div class="ffn"><span class="lbl">"${esc(names[last])}" after attention (${D} numbers)</span>${strip(F.h1[last],m)}
+      <span class="lbl">expanded to ${FF} numbers, negatives cut to 0</span>${strip(F.relu[last].map(v=>v/mr*m),m,1)}
+      <span class="lbl">squeezed back to ${D} and added on</span>${strip(F.h2[last],m)}</div>
+      <p>Attention moved information <b>between</b> tokens. Now each token's numbers go through the same small network <b>on their own</b>: ${D} → ${FF} → ${D} numbers. In large models, a lot of what the model knows is thought to be stored in these layers.</p>
+      <p class="real">Attention plus feed-forward make one transformer block. This mini model has 1 block; GPT-2 small stacks 12, and Llama 3 8B stacks 32, each one refining the numbers further.</p>`;
+  }else if(cur===6){
+    const sc=F.logits[last];const order=sc.map((v,i)=>[i,v]).sort((x,y)=>y[1]-x[1]);
+    body=`<div><p class="small" style="margin:0 0 6px">Last token's final ${D} numbers</p>${strip(F.h2[last],mx([F.h2[last]]))}</div>
+      <div><p class="small" style="margin:0 0 6px">× output weights (${D} × ${vocab.length}) = one score per vocabulary token</p><div class="lk">${order.map(([i,v])=>`<span>${esc(vocab[i])} <b style="color:${v>=0?"var(--pos)":"var(--neg)"}">${v.toFixed(2)}</b></span>`).join("")}</div></div>
+      <p>The same job as the weight grid in <a href="index.html">Lab 1</a>: turn numbers into a score for every possible next token. The difference: in Lab 1 the scores came from the last word alone. Here, thanks to attention, the last token's numbers carry the whole sentence.</p>
+      <p class="real">Only the last token's numbers are used to predict what comes next.</p>`;
+  }else{
+    const p=F.probs[last];const order=p.map((v,i)=>[i,v]).sort((x,y)=>y[1]-x[1]).slice(0,5);
+    const l1=lastTokenChances(ids[last]);const l1o=l1?l1.map((v,i)=>[i,v]).sort((x,y)=>y[1]-x[1]).slice(0,5):[];
+    const bars=(arr,cls)=>`<div class="bars ${cls||""}">${arr.map(([i,v],k)=>`<div class="bar-row${k===0?" top":""}"><span class="w">${esc(vocab[i])}</span><div class="bar-track"><div class="bar-fill" style="width:${(v*100).toFixed(1)}%"></div></div><span class="p">${pct(v)}</span></div>`).join("")}</div>`;
+    body=`<div class="cmp"><div><h4>Transformer (whole sentence)</h4>${bars(order)}</div>
+      <div><h4>Last token only, like Lab 1</h4>${l1?bars(l1o,"l1"):`<p class="real">"${esc(vocab[ids[last]])}" is never followed by anything in the training text.</p>`}</div></div>
+      <div class="row"><button class="primary" id="addTok">Add most likely token</button><button id="genSent">Finish the sentence</button><button id="resetP">Reset prompt</button></div>
+      <div class="out" id="outText">${esc($("prompt").value)}</div>
+      <p>Softmax turns the scores into chances, and one token is picked, exactly as in <a href="index.html">Lab 1</a>. Then it is added to the text and the whole model runs again for the next one.</p>`;
+  }
+  P.innerHTML=head+body+nav();bindNav();
+  if(cur===4)P.querySelectorAll(".att tbody tr").forEach(tr=>tr.onclick=()=>{attRow=+tr.dataset.r;renderPanel(true)});
+  if(cur===7){$("addTok").onclick=()=>addToken();$("genSent").onclick=()=>{let k=0;const tick=()=>{const t=addToken();if(t&&t!=="."&&++k<10)setTimeout(tick,300)};tick()};
+    $("resetP").onclick=()=>{$("prompt").value="River likes";attRow=null;renderPanel(true)}}
+}
+function addToken(){
+  const ctx=contextIds($("prompt").value);if(ctx.err)return null;const F=model.forward(ctx.ids);const p=F.probs[F.probs.length-1];const k=topOf(p);
+  $("prompt").value=($("prompt").value.trim()+(vocab[k]==="."?"":" ")+vocab[k]).replace(/\s+\./g,".");attRow=null;renderPanel(true);
+  const o=$("outText");if(o){const t=o.textContent;const add=vocab[k];const i=t.lastIndexOf(add==="."?".":" "+add);if(i>=0)o.innerHTML=esc(t.slice(0,i))+`<span class="new">${esc(t.slice(i))}</span>`}
+  return vocab[k];
+}
+
+/* ---------- scale ---------- */
+function renderScale(){
+  const rows=[["Vocabulary (tokens)",vocab.length.toLocaleString("en-US"),"50,257","128,256"],
+    ["Numbers per token",D,"768","4,096"],["Transformer blocks",1,"12","32"],["Attention heads per block",1,"12","32"],
+    ["Context (tokens it can see)",MAXPOS,"1,024","8,192"],["Weights in total",model.count().toLocaleString("en-US"),"124 million","8 billion"]];
+  $("scale").innerHTML=`<thead><tr><th></th><th class="me">This mini model</th><th>GPT-2 small (2019)</th><th>Llama 3 8B (2024)</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td>${r[0]}</td><td class="me">${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")+"</tbody>";
+}
+
+function rebuild(){buildData();newModel();attRow=null;renderStats();renderTest();renderStack();renderPanel();renderScale()}
+$("trainBtn").onclick=train;
+$("resetBtn").onclick=()=>{if(running)return;newModel();attRow=null;renderStats();renderTest();renderPanel(true)};
+$("useText").onclick=()=>{if(running)return;rebuild()};
+$("prompt").oninput=()=>{attRow=null;renderPanel(true)};
+rebuild();
+</script>
+</body>
+</html>
