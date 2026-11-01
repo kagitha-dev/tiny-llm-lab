@@ -118,6 +118,23 @@ table.mat{border-collapse:separate;border-spacing:3px;font-family:var(--mono);fo
 .out .new{color:var(--pos)}
 .pickNote{font-size:14.5px;color:var(--muted);margin:12px 0 0;min-height:1.3em}
 .pickNote b{color:var(--ink)}
+.pickNote a{color:var(--pos);cursor:pointer}
+details.why{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+details.why summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:15px}
+.why-body{padding:0 16px 16px}
+.jar-wrap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:640px){.jar-wrap{grid-template-columns:minmax(0,1fr)}}
+.jar{display:grid;grid-template-columns:repeat(10,16px);gap:4px;padding:12px;border:2px solid var(--line);border-top:0;border-radius:0 0 18px 18px;width:max-content}
+.jar i{width:16px;height:16px;border-radius:50%;transition:background .3s}
+.jar-key{display:flex;flex-direction:column;gap:4px;margin-top:10px;font:13px var(--mono)}
+.jar-key span{display:flex;align-items:center;gap:6px}
+.jar-key i{width:12px;height:12px;border-radius:50%;flex:none}
+.why-text p{margin:0 0 8px;max-width:62ch}
+.tally{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.tally .bar-row{grid-template-columns:72px minmax(0,1fr) 190px}
+.tally .p{font-size:13px}
+.why-foot{font-size:14px;color:var(--muted);margin:14px 0 0;max-width:80ch}
+.why-foot b{color:var(--ink)}
 .err{font-size:14px;color:var(--neg);min-height:1.3em;margin:6px 0 0}
 svg.spark{display:block;width:100%;height:36px}
 .foot{color:var(--muted);font-size:14px;max-width:80ch;margin:0}
@@ -249,6 +266,18 @@ aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:c
       <button id="clearP">Clear input</button>
     </div>
     <p class="pickNote" id="pickNote"></p>
+    <details class="why" id="why">
+      <summary>Why doesn't it always pick the top token?</summary>
+      <div class="why-body">
+        <div class="jar-wrap">
+          <div><div class="jar" id="jar" aria-label="100 marbles coloured by chance"></div><div class="jar-key" id="jarKey"></div></div>
+          <div class="why-text" id="whyText"></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button id="draw100">Draw 100 times</button><span class="small" style="margin:0">Only counts the draws. Nothing is added to the text.</span></div>
+        <div class="tally" id="tally"></div>
+        <p class="why-foot"><b>Temperature</b> changes the jar: low makes the top token fill almost every marble, high makes the colours more even. <b>Top-k</b> decides how many different colours are allowed in the jar at all; top-k 1 means only the top token, so it is picked every time.</p>
+      </div>
+    </details>
     <div class="out" id="out"></div>
   </section>
 
@@ -424,7 +453,7 @@ function predict(){
   const w=toLast();$("lastw").textContent=w;$("perr").textContent="";
   const toks=tokenize($("prompt").value);$("out").innerHTML=toks.map(esc).join(" ");
   $("mat").querySelectorAll("tbody tr").forEach(tr=>tr.classList.toggle("active",!!saved&&!dirtySinceSave&&tr.dataset.w===w));
-  const clear=msg=>{$("lookup").innerHTML="";$("bars").innerHTML="";$("perr").textContent=msg;return null};
+  const clear=msg=>{$("lookup").innerHTML="";$("bars").innerHTML="";$("perr").textContent=msg;renderWhy(null);return null};
   if(!saved)return clear("No saved model to load. Train and save first.");
   if(!w)return clear("Type a word to start.");
   const i=saved.vocab.indexOf(w);
@@ -436,6 +465,7 @@ function predict(){
   $("probHint").textContent=`Temperature ${T.toFixed(1)}, top-k ${k||"all"}. ${k>0&&k<saved.vocab.length?"Faded rows are cut by top-k and can't be picked.":"Every token can be picked."}`;
   $("bars").innerHTML=order.slice(0,Math.max(6,Math.min(keep.length,8))).map((j,r)=>{const cut=!keep.includes(j);
     return `<div class="bar-row${r===0?" top":""}${cut?" cut":""}"><span class="w">${esc(saved.vocab[j])}</span><div class="bar-track"><div class="bar-fill" style="width:${(q[j]*100).toFixed(1)}%"></div></div><span class="p">${pct(q[j])}</span></div>`}).join("");
+  renderWhy(q);
   return q;
 }
 function toLast(){const t=tokenize($("prompt").value);return t[t.length-1]||""}
@@ -444,7 +474,7 @@ function addToken(steps,greedy){
   let x=Math.random(),s=0,k=q.indexOf(Math.max(...q));if(!greedy)for(let j=0;j<q.length;j++){if(!q[j])continue;s+=q[j];if(x<=s){k=j;break}}
   const best=q.indexOf(Math.max(...q));
   $("pickNote").innerHTML=greedy?`Picked <b>${esc(saved.vocab[k])}</b>, the most likely token (${pct(q[k])}).`:
-    `Picked <b>${esc(saved.vocab[k])}</b> by chance (${pct(q[k])}).`+(k===best?"":` Not the top choice: <b>${esc(saved.vocab[best])}</b> had ${pct(q[best])}, but every token in the top-k can win, in proportion to its chance. Real chatbots pick this way, which is why the same question can get different answers.`);
+    `Picked <b>${esc(saved.vocab[k])}</b> by chance (${pct(q[k])}).`+(k===best?"":` Not the top choice: <b>${esc(saved.vocab[best])}</b> had ${pct(q[best])}. <a id="whyLink">Why?</a>`);
   const w=toLast(),row=saved.W[saved.vocab.indexOf(w)];const{T,k:K}=sampling();
   $("prompt").value=($("prompt").value.trim()+" "+saved.vocab[k]).trim();
   if(steps)steps.push(`<code>${esc(w)}</code> → <code>${esc(saved.vocab[k])}</code> ${pct(q[k])}`);
@@ -464,6 +494,35 @@ function resetWeights(quiet){if(running)return;seedState=SEED;vocab=[];W=[];epoc
   dirtySinceSave=saved!==null;$("changes").innerHTML=`<li class="empty">Nothing trained yet.</li>`;syncVocab();buildMatrix();renderAll();
   if(!quiet)log("info","Weights reset",`<p>Every weight is back to a random number between −0.5 and 0.5. The model has forgotten everything it learned, so its guesses are random again.</p>`+(saved?`<p>The saved file is kept, so predictions still use the last saved model.</p>`:""))}
 
+const JAR_COLORS=["var(--pos)","var(--warn)","var(--good)","var(--neg)","var(--muted)"];
+let whyQ=null;
+function jarCounts(q){const idx=[...q.keys()].filter(j=>q[j]>0).sort((a,b)=>q[b]-q[a]);
+  const shown=idx.slice(0,4);const rest=idx.slice(4);const raw=shown.map(j=>q[j]*100);let restP=rest.reduce((a,j)=>a+q[j]*100,0);
+  const items=shown.map((j,n)=>({label:saved.vocab[j],p:q[j],x:raw[n]}));if(restP>0)items.push({label:"others",p:restP/100,x:restP});
+  items.forEach(it=>it.n=Math.floor(it.x));let left=100-items.reduce((a,b)=>a+b.n,0);
+  [...items].sort((a,b)=>(b.x-b.n)-(a.x-a.n)).forEach(it=>{if(left>0){it.n++;left--}});return items.filter(x=>x.n>0)}
+function renderWhy(q){
+  whyQ=q;const w=$("why");if(!w||!w.open)return;
+  if(!q){$("jar").innerHTML="";$("jarKey").innerHTML="";$("whyText").innerHTML=`<p>Save a model and type a word in the input above to fill the jar.</p>`;$("tally").innerHTML="";return}
+  const items=jarCounts(q);let dots="";items.forEach((it,n)=>{for(let i=0;i<it.n;i++)dots+=`<i style="background:${JAR_COLORS[n]}"></i>`});
+  $("jar").innerHTML=dots;
+  $("jarKey").innerHTML=items.map((it,n)=>`<span><i style="background:${JAR_COLORS[n]}"></i>${esc(it.label)} ${it.n}</span>`).join("");
+  const a=items[0],b=items[1],w0=toLast();
+  $("whyText").innerHTML=a?`<p>The model never decides "the answer is <b>${esc(a.label)}</b>". It only says how likely each token is after <b>${esc(w0)}</b>. Picking by chance is like a jar with ${items.map(it=>`${it.n} <b>${esc(it.label)}</b>`).join(", ").replace(/, ([^,]*)$/," and $1")} marbles: shake it and draw one.</p>`+
+    (b?`<p>Most draws give <b>${esc(a.label)}</b>, but <b>${esc(b.label)}</b> still comes out about ${b.n} times in 100. Getting ${esc(b.label)} isn't a mistake; it's what ${b.n}% means. A weather forecast works the same way: a 60% chance of rain doesn't mean it always rains.</p>`:`<p>Only one token is in the jar, so it is picked every time.</p>`)+
+    `<p>Real chatbots pick this way, which is why the same question can get different answers. Always taking the top token gives the same words every time and tends to repeat itself.</p>`:"";
+  $("tally").innerHTML="";
+}
+function draw100(){
+  const q=whyQ;if(!q)return;const c=Array(q.length).fill(0);
+  for(let n=0;n<100;n++){let x=Math.random(),s=0,k=q.indexOf(Math.max(...q));for(let j=0;j<q.length;j++){if(!q[j])continue;s+=q[j];if(x<=s){k=j;break}}c[k]++}
+  const order=[...q.keys()].filter(j=>q[j]>0).sort((a,b)=>q[b]-q[a]).slice(0,5);
+  $("tally").innerHTML=`<p class="small" style="margin:0">Drawn 100 times:</p>`+order.map((j,r)=>`<div class="bar-row${r===0?" top":""}"><span class="w">${esc(saved.vocab[j])}</span><div class="bar-track"><div class="bar-fill" style="width:${c[j]}%"></div></div><span class="p">${c[j]} times (chance ${Math.round(q[j]*100)}%)</span></div>`).join("")+
+    `<p class="small" style="margin:4px 0 0">Draw again and the counts change a little, but they stay close to the chances.</p>`;
+}
+$("why").addEventListener("toggle",()=>{if($("why").open)predict()});
+$("draw100").onclick=draw100;
+document.addEventListener("click",e=>{if(e.target.id==="whyLink"){$("why").open=true;$("why").scrollIntoView({behavior:"smooth",block:"nearest"})}});
 $("trainBtn").onclick=train;$("saveBtn").onclick=save;
 $("addBtn").onclick=addText;$("more").onkeydown=e=>{if(e.key==="Enter")addText()};
 $("resetW").onclick=()=>resetWeights(false);
