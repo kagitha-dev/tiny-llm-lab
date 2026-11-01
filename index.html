@@ -116,6 +116,8 @@ table.mat{border-collapse:separate;border-spacing:3px;font-family:var(--mono);fo
 .samp{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin-top:16px;padding:12px 14px;background:var(--cell);border-radius:10px}
 .out{font:600 22px/1.4 var(--mono);background:var(--cell);border-radius:10px;padding:12px 14px;margin-top:16px;word-break:break-word;min-height:58px}
 .out .new{color:var(--pos)}
+.pickNote{font-size:14.5px;color:var(--muted);margin:12px 0 0;min-height:1.3em}
+.pickNote b{color:var(--ink)}
 .err{font-size:14px;color:var(--neg);min-height:1.3em;margin:6px 0 0}
 svg.spark{display:block;width:100%;height:36px}
 .foot{color:var(--muted);font-size:14px;max-width:80ch;margin:0}
@@ -241,10 +243,12 @@ aside{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:c
       <span class="hint">Low temperature sharpens the chances, high flattens them. Top-k keeps only the k most likely tokens.</span>
     </div>
     <div class="row" style="margin-top:16px">
-      <button class="primary" id="next">Add next token</button>
-      <button id="gen">Generate 6 tokens</button>
+      <button class="primary" id="best">Add most likely token</button>
+      <button id="next">Add a token by chance</button>
+      <button id="gen">Generate 6 tokens by chance</button>
       <button id="clearP">Clear input</button>
     </div>
+    <p class="pickNote" id="pickNote"></p>
     <div class="out" id="out"></div>
   </section>
 
@@ -435,16 +439,19 @@ function predict(){
   return q;
 }
 function toLast(){const t=tokenize($("prompt").value);return t[t.length-1]||""}
-function addToken(steps){
+function addToken(steps,greedy){
   const q=predict();if(!q)return false;
-  let x=Math.random(),s=0,k=q.indexOf(Math.max(...q));for(let j=0;j<q.length;j++){if(!q[j])continue;s+=q[j];if(x<=s){k=j;break}}
+  let x=Math.random(),s=0,k=q.indexOf(Math.max(...q));if(!greedy)for(let j=0;j<q.length;j++){if(!q[j])continue;s+=q[j];if(x<=s){k=j;break}}
+  const best=q.indexOf(Math.max(...q));
+  $("pickNote").innerHTML=greedy?`Picked <b>${esc(saved.vocab[k])}</b>, the most likely token (${pct(q[k])}).`:
+    `Picked <b>${esc(saved.vocab[k])}</b> by chance (${pct(q[k])}).`+(k===best?"":` Not the top choice: <b>${esc(saved.vocab[best])}</b> had ${pct(q[best])}, but every token in the top-k can win, in proportion to its chance. Real chatbots pick this way, which is why the same question can get different answers.`);
   const w=toLast(),row=saved.W[saved.vocab.indexOf(w)];const{T,k:K}=sampling();
   $("prompt").value=($("prompt").value.trim()+" "+saved.vocab[k]).trim();
   if(steps)steps.push(`<code>${esc(w)}</code> → <code>${esc(saved.vocab[k])}</code> ${pct(q[k])}`);
   else{const top=[...q.keys()].sort((i,j)=>q[j]-q[i]).slice(0,3).filter(j=>q[j]>0);
     log("predict",`Predicted "${saved.vocab[k]}"`,`<p>Took the last token <code>${esc(w)}</code> and looked up its row in the saved weights. Softmax at temperature ${T.toFixed(1)}, keeping the top ${K||"all"}, turned those weights into chances:</p>`+
       miniTable(`after "${w}"`,top.map(j=>saved.vocab[j]),[["weight",top.map(j=>fmt(row[j],2))],["chance",top.map(j=>pct(q[j]))]])+
-      `<p>${top.length===1?`Only one token was allowed, so it picked <code>${esc(saved.vocab[k])}</code>.`:`Picked at random, weighted by those chances: <code>${esc(saved.vocab[k])}</code> (${pct(q[k])}).`} The text is now "<b>${esc($("prompt").value)}</b>". No weights changed.</p>`)}
+      `<p>${greedy?`Picked the highest chance: <code>${esc(saved.vocab[k])}</code>.`:top.length===1?`Only one token was allowed, so it picked <code>${esc(saved.vocab[k])}</code>.`:`Picked at random, weighted by those chances: <code>${esc(saved.vocab[k])}</code> (${pct(q[k])}).`} The text is now "<b>${esc($("prompt").value)}</b>". No weights changed.</p>`)}
   predict();
   const out=$("out");const parts=out.innerHTML.split(" ");parts[parts.length-1]=`<span class="new">${parts[parts.length-1]}</span>`;out.innerHTML=parts.join(" ");
   return true;
@@ -468,10 +475,11 @@ $("prompt").oninput=predict;
 $("temp").oninput=()=>{$("tempOut").textContent=(+$("temp").value).toFixed(1);predict()};
 $("topk").onchange=predict;
 $("next").onclick=()=>addToken();
+$("best").onclick=()=>addToken(null,true);
 $("gen").onclick=()=>{let n=0;const steps=[];const start=$("prompt").value.trim();const{T,k}=sampling();
   const end=()=>{if(steps.length)log("predict",`Generated ${steps.length} tokens`,`<p>Started from "<b>${esc(start)}</b>" with temperature ${T.toFixed(1)} and top-k ${k||"all"}. Each step looked up the last token's row, turned it into chances, picked one, added it, and used it as the new last token:</p><p>${steps.join("<br>")}</p><p>Result: "<b>${esc($("prompt").value)}</b>". This loop of predict, add, repeat is how a language model writes longer text.</p>`)};
   const tick=()=>{if(n++<6&&addToken(steps))setTimeout(tick,350);else end()};tick()};
-$("clearP").onclick=()=>{$("prompt").value="";predict()};
+$("clearP").onclick=()=>{$("prompt").value="";$("pickNote").textContent="";predict()};
 $("copy").onclick=()=>{const t=$("file").textContent;const b=$("copy");
   navigator.clipboard.writeText(t).then(()=>{b.textContent="Copied"},()=>{const r=document.createRange();r.selectNodeContents($("file"));const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Selected, press Ctrl+C"});
   setTimeout(()=>b.textContent="Copy",2000)};
