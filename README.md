@@ -12,7 +12,7 @@ Everything runs in the browser. No server, no install, no AI library: the traini
 # Experience: https://kagitha-dev.github.io/tiny-llm-lab/index.html
 ## Pages
 
-The four labs build on each other:
+The five labs build on each other:
 
 | Lab | What it shows |
 |---|---|
@@ -20,6 +20,7 @@ The four labs build on each other:
 | `tokens.html`: 2 · Text to numbers | How text reaches the weights. Your sentence goes through six steps: characters, clean-up, subword tokens (byte-pair encoding), IDs, a row read from the embedding weights, and the input grid. Also shows GPT-4o's real tokenizer on the same text, and a map where embeddings are learned. |
 | `transformer.html`: 3 · Transformer | How it all connects. A real one-block transformer trained in the browser. Follow a prompt through every block (embeddings, positions, attention, feed-forward, output, softmax), each tagged with the lab that covered it, and see where it beats the last-token-only model. |
 | `weights.html`: 4 · How a weight is made | How one weight is made and used, from the sentence "My puppy name is River. River likes Ruby." The number for "my → puppy" starts random; each round the model checks the chance it gave "puppy", sees how much is missing to 100%, and adds half of that (like salting a curry: taste, see how far off, add a pinch). Then the number is saved, and a prompt reads it to predict the next word. |
+| `ask.html`: 5 · Ask a question | Why an LLM can answer “What is my puppy name?” when Lab 1 can’t. Same weight grid and steps as Lab 1, but it reads **every word** of the input: the rows of all input tokens are added and the total goes through softmax. Trained on “My puppy name is River. River likes Ruby.”, it answers *river*. Works with any text (it starts from the text used in Lab 1 and suggests questions made from it). |
 
 Open `index.html` in a browser to start. Each page is a single self-contained HTML file; Lab 2 loads the GPT-4o tokenizer from a CDN.
 
@@ -55,6 +56,7 @@ Training saves `tiny_model.json`. The browser lab reads and writes the same form
 | File | Purpose |
 |---|---|
 | `index.html` | Tiny LLM Lab |
+| `ask.html` | Ask a question (reads the whole input, not only the last token) |
 | `tokens.html` | Tokens and embeddings |
 | `tiny_llm.py` | Python version: train, save, predict, generate |
 | `data.txt`, `data2.txt` | Sample training text (`data2.txt` adds one sentence) |
